@@ -1,0 +1,25 @@
+# Career Pages Configuration
+
+career_pages:
+  - name: "GitHub Careers"
+    url: "https://www.github.careers/careers-home/jobs"
+    type: api
+    api_url: "https://www.github.careers/api/jobs"
+    keywords: "software engineer"
+
+  - name: "Amazon Jobs"
+    url: "https://www.amazon.jobs/en/search?category%5B%5D=software-development&country%5B%5D=USA&sort=recent"
+    type: api
+    api_url: "https://www.amazon.jobs/en/search.json"
+
+  - name: "Microsoft Jobs"
+    url: "https://apply.careers.microsoft.com/careers?query=Software+Development&sort_by=timestamp&filter_include_remote=1"
+    type: api
+    api_url: "https://apply.careers.microsoft.com/api/pcsx/search"
+    keywords: "Software Development"
+
+  - name: "Geico Careers"
+    url: "https://geico.wd1.myworkdayjobs.com/External?q=software"
+    type: api
+    api_url: "https://geico.wd1.myworkdayjobs.com/wday/cxs/geico/External/jobs"
+    keywords: "software"

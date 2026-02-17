@@ -1,0 +1,44 @@
+# ==== Python ====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# ==== Virtual Environments ====
+venv/
+.venv/
+env/
+
+# ==== Environment / Secrets ====
+.env
+.env.local
+
+# ==== Output (generated at runtime) ====
+output/
+
+# ==== IDE / Editors ====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ==== OS ====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ==== Misc ====
+*.log
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
