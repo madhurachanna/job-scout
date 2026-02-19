@@ -20,6 +20,7 @@ env/
 
 # ==== Output (generated at runtime) ====
 output/
+data/
 
 # ==== IDE / Editors ====
 .vscode/

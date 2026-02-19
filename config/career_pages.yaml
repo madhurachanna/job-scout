@@ -1,25 +1,78 @@
 # Career Pages Configuration
 
 career_pages:
+  # ── GitHub ─────────────────────────────────────────────────
   - name: "GitHub Careers"
     url: "https://www.github.careers/careers-home/jobs"
     type: api
     api_url: "https://www.github.careers/api/jobs"
     keywords: "software engineer"
 
+  # ── Amazon ─────────────────────────────────────────────────
   - name: "Amazon Jobs"
     url: "https://www.amazon.jobs/en/search?category%5B%5D=software-development&country%5B%5D=USA&sort=recent"
     type: api
     api_url: "https://www.amazon.jobs/en/search.json"
 
+  # ── Microsoft ──────────────────────────────────────────────
   - name: "Microsoft Jobs"
     url: "https://apply.careers.microsoft.com/careers?query=Software+Development&sort_by=timestamp&filter_include_remote=1"
     type: api
     api_url: "https://apply.careers.microsoft.com/api/pcsx/search"
     keywords: "Software Development"
 
+  # ── Workday Sites ──────────────────────────────────────────
   - name: "Geico Careers"
     url: "https://geico.wd1.myworkdayjobs.com/External?q=software"
     type: api
     api_url: "https://geico.wd1.myworkdayjobs.com/wday/cxs/geico/External/jobs"
     keywords: "software"
+
+  - name: "Capital One Careers"
+    url: "https://capitalone.wd1.myworkdayjobs.com/Capital_One?q=software+engineer"
+    type: api
+    api_url: "https://capitalone.wd1.myworkdayjobs.com/wday/cxs/capitalone/Capital_One/jobs"
+    keywords: "software engineer"
+
+  - name: "Walmart Tech Careers"
+    url: "https://walmart.wd5.myworkdayjobs.com/WalmartExternal?q=software+engineer"
+    type: api
+    api_url: "https://walmart.wd5.myworkdayjobs.com/wday/cxs/walmart/WalmartExternal/jobs"
+    keywords: "software engineer"
+
+  # ── Lever Sites ────────────────────────────────────────────
+  - name: "Figma Jobs"
+    url: "https://jobs.lever.co/figma"
+    type: api
+    api_url: "https://api.lever.co/v0/postings/figma"
+
+  - name: "Yelp Careers"
+    url: "https://jobs.lever.co/yelp"
+    type: api
+    api_url: "https://api.lever.co/v0/postings/yelp"
+
+  # ── Greenhouse Sites ───────────────────────────────────────
+  - name: "Twitch Careers"
+    url: "https://boards.greenhouse.io/twitch"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/twitch/jobs"
+
+  - name: "GitLab Careers"
+    url: "https://boards.greenhouse.io/gitlab"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/gitlab/jobs"
+
+  - name: "Cloudflare Jobs"
+    url: "https://boards.greenhouse.io/cloudflare"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs"
+
+  - name: "Pinterest Careers"
+    url: "https://boards.greenhouse.io/pinterest"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/pinterest/jobs"
+
+  - name: "Airbnb Careers"
+    url: "https://boards.greenhouse.io/airbnb"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/airbnb/jobs"

@@ -368,3 +368,126 @@ def parse_workday_jobs_api(api_response: dict, source_name: str, base_url: str) 
         })
 
     return jobs
+
+
+def parse_lever_jobs_api(api_response: list, source_name: str) -> list[dict]:
+    """
+    Parse the Lever Postings API response into job dicts.
+
+    Lever returns a flat JSON array of posting objects.
+    Endpoint: GET https://api.lever.co/v0/postings/{company}
+
+    Args:
+        api_response: Raw JSON response (list of posting dicts).
+        source_name: Name of the source for attribution.
+
+    Returns:
+        List of job dicts ready for the normalizer.
+    """
+    jobs = []
+
+    for raw_job in api_response:
+        # Build location from categories
+        categories = raw_job.get("categories", {})
+        location = categories.get("location", "Not specified")
+        department = categories.get("department", "")
+        team = categories.get("team", "")
+        commitment = categories.get("commitment", "Full-time")
+
+        # Build job URL
+        job_url = raw_job.get("hostedUrl", "")
+
+        # Parse created timestamp (Unix milliseconds)
+        date_posted = ""
+        created_at = raw_job.get("createdAt")
+        if created_at:
+            try:
+                from datetime import datetime, timezone
+                dt = datetime.fromtimestamp(created_at / 1000, tz=timezone.utc)
+                date_posted = dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
+            except (ValueError, TypeError, OSError):
+                pass
+
+        # Extract company name from the first part of source_name
+        # or use the text field
+        company = source_name.replace(" Jobs", "").replace(" Careers", "")
+
+        # Description: combine description lists if available
+        desc_plain = raw_job.get("descriptionPlain", "")
+        if desc_plain:
+            description = desc_plain[:300].strip()
+        else:
+            description = raw_job.get("text", "")
+
+        jobs.append({
+            "title": raw_job.get("text", "Unknown"),
+            "company": company,
+            "location": location,
+            "url": job_url,
+            "description": description,
+            "date_posted": date_posted,
+            "source": source_name,
+            "job_type": commitment if commitment else "Full-time",
+        })
+
+    return jobs
+
+
+def parse_greenhouse_jobs_api(api_response: dict, source_name: str) -> list[dict]:
+    """
+    Parse the Greenhouse Job Board API response into job dicts.
+
+    Endpoint: GET https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs
+
+    Args:
+        api_response: Raw JSON response from the Greenhouse API.
+        source_name: Name of the source for attribution.
+
+    Returns:
+        List of job dicts ready for the normalizer.
+    """
+    jobs = []
+
+    raw_jobs = api_response.get("jobs", [])
+
+    for raw_job in raw_jobs:
+        # Build location
+        location_obj = raw_job.get("location", {})
+        location = location_obj.get("name", "Not specified") if location_obj else "Not specified"
+
+        # Build job URL
+        job_url = raw_job.get("absolute_url", "")
+
+        # Parse updated_at timestamp (ISO 8601: "2026-02-15T14:30:00-05:00")
+        date_posted = ""
+        updated_at = raw_job.get("updated_at", "")
+        if updated_at:
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(updated_at)
+                date_posted = dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
+            except (ValueError, TypeError):
+                pass
+
+        # Extract company name from source_name
+        company = source_name.replace(" Careers", "").replace(" Jobs", "")
+
+        # Departments
+        departments = raw_job.get("departments", [])
+        dept_names = [d.get("name", "") for d in departments if d.get("name")]
+
+        # Description — metadata only since full content requires per-job fetch
+        description = ", ".join(dept_names) if dept_names else ""
+
+        jobs.append({
+            "title": raw_job.get("title", "Unknown"),
+            "company": company,
+            "location": location,
+            "url": job_url,
+            "description": description,
+            "date_posted": date_posted,
+            "source": source_name,
+            "job_type": "Full-time",
+        })
+
+    return jobs

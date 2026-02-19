@@ -49,6 +49,31 @@ class Settings:
         default_factory=lambda: os.getenv("SKIP_NORMALIZATION", "false").lower() == "true"
     )
 
+    # Email / SMTP Configuration
+    smtp_host: str = field(
+        default_factory=lambda: os.getenv("SMTP_HOST", "smtp.gmail.com")
+    )
+    smtp_port: int = field(
+        default_factory=lambda: int(os.getenv("SMTP_PORT", "587"))
+    )
+    smtp_user: str = field(
+        default_factory=lambda: os.getenv("SMTP_USER", "")
+    )
+    smtp_password: str = field(
+        default_factory=lambda: os.getenv("SMTP_PASSWORD", "")
+    )
+    notify_email: str = field(
+        default_factory=lambda: os.getenv("NOTIFY_EMAIL", "")
+    )
+
+    # Database
+    db_path: str = field(
+        default_factory=lambda: os.getenv(
+            "DB_PATH",
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "job_scout.db"),
+        )
+    )
+
 
 # Singleton instance
 settings = Settings()
