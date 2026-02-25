@@ -5,21 +5,37 @@ HTML Report Generator — creates a beautiful static HTML page for job listings.
 from datetime import datetime
 
 
-def generate_html_report(jobs: list[dict], output_path: str) -> str:
+def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = None) -> str:
     """
     Generate a static HTML page displaying all job listings with a sidebar filter.
 
     Args:
         jobs: List of standardized job dicts.
         output_path: Path to save the HTML file.
+        new_keys: Optional set of dedup keys (title|company|location) for jobs
+                  discovered in the latest scrape. These get a NEW badge and
+                  trigger the "N new jobs" banner.
 
     Returns:
         Path to the generated HTML file.
     """
     timestamp_str = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+    new_keys = new_keys or set()
+    new_count = len(new_keys)
     
     # Pre-calculate counts for filters
     total_jobs = len(jobs)
+
+    # Build new-jobs banner HTML
+    if new_count > 0:
+        label = "1 new job" if new_count == 1 else f"{new_count} new jobs"
+        new_banner_html = f"""
+    <div class="new-banner" id="new-banner">
+      <span>🆕 {label} since last refresh</span>
+      <button class="banner-close" onclick="document.getElementById('new-banner').style.display='none'" title="Dismiss">✕</button>
+    </div>"""
+    else:
+        new_banner_html = ""
     
     import time
     now_ts = time.time()
@@ -30,6 +46,8 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
     count_24h = 0
     count_48h = 0
     
+    count_no_date = 0
+
     for job in jobs:
         # Standardize date to timestamp
         date_str = job.get("date_posted")
@@ -46,6 +64,12 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
                 pass
         
         job["_ts"] = ts
+
+        # Only count jobs with a valid date in time-based filters
+        if ts == 0:
+            count_no_date += 1
+            continue
+
         age = now_ts - ts
         
         if age < 3600: count_1h += 1
@@ -141,13 +165,23 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
                     date_display = dt_local.strftime("%b %d, %I:%M %p")
                 except (ValueError, TypeError):
                     date_display = date_posted
+            else:
+                date_display = "Date unknown"
 
             # Truncate description for card
             desc_short = description[:160] + "..." if len(description) > 160 else description
             
-            job_cards_html += f"""    <div class="job-card" data-ts="{ts}">
+            card_href = f'href="{url}" ' if url else ''
+            card_target = 'target="_blank" ' if url else ''
+
+            # Check if this job is new
+            job_dedup_key = f"{job.get('title','').lower().strip()}|{job.get('company','').lower().strip()}|{job.get('location','').lower().strip()}"
+            is_new = job_dedup_key in new_keys
+            new_badge = '<span class="new-badge">New</span>' if is_new else ''
+
+            job_cards_html += f"""    <a {card_href}{card_target}class="job-card" data-ts="{ts}">
       <div class="job-header">
-        <h3 class="job-title">{title}</h3>
+        <h3 class="job-title">{title}{new_badge}</h3>
       </div>
       <div class="job-meta">
         {f'<span class="meta-item">📍 {location}</span>' if location else ''}
@@ -157,8 +191,7 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
          {f'<span class="tag">{job_type}</span>' if job_type else ''}
          {f'<span class="tag source-tag">{source}</span>' if source else ''}
       </div>
-      {f'<a href="{url}" target="_blank" class="apply-link">View Job →</a>' if url else ''}
-    </div>
+    </a>
 """
         job_cards_html += '  </div>\n</div>\n'
     job_cards_html += '</div>'
@@ -174,13 +207,49 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
   <title>Job Scout — {timestamp_str}</title>
   <style>
     :root {{
-      --bg-dark: #0f0f13;
-      --bg-panel: #181820;
-      --border: #2a2a35;
-      --accent: #6366f1;
-      --accent-hover: #4f46e5;
-      --text-main: #e0e0e0;
-      --text-muted: #9ca3af;
+      --bg-dark: #111111;
+      --bg-panel: #1a1a1a;
+      --bg-panel2: #1f1f1f;
+      --border: #2e2e2e;
+      --accent: #f97316;
+      --accent-2: #fb923c;
+      --accent-hover: #ea580c;
+      --accent-glow: rgba(249, 115, 22, 0.22);
+      --text-main: #ffffff;
+      --text-muted: #c0c0cc;
+      --card-bg: rgba(255,255,255,0.035);
+      --card-bg-hover: rgba(249, 115, 22, 0.07);
+      --card-border-hover: rgba(249, 115, 22, 0.45);
+      --tag-bg: rgba(249, 115, 22, 0.12);
+      --tag-color: #fdba74;
+      --filter-btn-bg: rgba(255,255,255,0.05);
+      --filter-btn-hover: rgba(249, 115, 22, 0.1);
+      --toolbar-btn-hover: rgba(249, 115, 22, 0.1);
+      --source-tag-bg: rgba(249, 115, 22, 0.13);
+      --source-tag-color: #fb923c;
+    }}
+
+    [data-theme="light"] {{
+      --bg-dark: #f5f5f5;
+      --bg-panel: #ffffff;
+      --bg-panel2: #fafafa;
+      --border: #e5e5e5;
+      --accent: #ea580c;
+      --accent-2: #f97316;
+      --accent-hover: #c2410c;
+      --accent-glow: rgba(234, 88, 12, 0.15);
+      --text-main: #111111;
+      --text-muted: #555555;
+      --card-bg: #ffffff;
+      --card-bg-hover: #fff7ed;
+      --card-border-hover: #fdba74;
+      --tag-bg: #fff7ed;
+      --tag-color: #c2410c;
+      --filter-btn-bg: #f5f5f5;
+      --filter-btn-hover: #fff7ed;
+      --toolbar-btn-hover: #fff7ed;
+      --source-tag-bg: rgba(249,115,22,0.1);
+      --source-tag-color: #ea580c;
     }}
 
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -216,10 +285,91 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
     .brand span {{ color: var(--accent); }}
     .subtitle {{ color: var(--text-muted); font-size: 0.85rem; margin-top: 2px; }}
 
-    .stats {{ display: flex; gap: 1.5rem; }}
+    .stats {{ display: flex; gap: 1.5rem; align-items: center; }}
     .stat {{ display: flex; flex-direction: column; align-items: flex-end; }}
-    .stat-val {{ font-size: 1.1rem; font-weight: 700; color: #fff; line-height: 1; }}
+    .stat-val {{ font-size: 1.1rem; font-weight: 700; color: var(--text-main); line-height: 1; }}
     .stat-lbl {{ font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; margin-top: 4px; }}
+
+    /* Theme Toggle */
+    .theme-toggle {{
+      background: var(--filter-btn-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }}
+    .theme-toggle:hover {{ background: var(--filter-btn-hover); color: var(--text-main); }}
+
+    /* Refresh Button */
+    .refresh-btn {{
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      color: #fff; border: none;
+      padding: 0.5rem 1.2rem;
+      border-radius: 8px; font-size: 0.85rem;
+      cursor: pointer; font-weight: 600;
+      transition: all 0.25s;
+      display: none; /* Hidden until server detected */
+      align-items: center; gap: 6px;
+    }}
+    .refresh-btn:hover {{ transform: translateY(-1px); box-shadow: 0 4px 15px var(--accent-glow); }}
+    .refresh-btn:disabled {{ opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }}
+    .refresh-btn .spinner {{
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+
+    /* New-jobs Banner */
+    .new-banner {{
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      color: #fff;
+      padding: 0.65rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      flex-shrink: 0;
+      animation: slideDown 0.4s ease;
+    }}
+    @keyframes slideDown {{
+      from {{ transform: translateY(-100%); opacity: 0; }}
+      to   {{ transform: translateY(0);    opacity: 1; }}
+    }}
+    .banner-close {{
+      background: rgba(255,255,255,0.2);
+      border: none; color: #fff;
+      width: 24px; height: 24px;
+      border-radius: 50%; cursor: pointer;
+      font-size: 0.8rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }}
+    .banner-close:hover {{ background: rgba(255,255,255,0.35); }}
+
+    /* NEW badge on job cards */
+    .new-badge {{
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      vertical-align: middle;
+      text-transform: uppercase;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }}
+
     
     /* Toolbar (Horizontal Date Filters) */
     .toolbar {{
@@ -244,7 +394,7 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
     }}
     
     .toolbar-btn {{
-      background: rgba(255,255,255,0.05);
+      background: var(--filter-btn-bg);
       border: 1px solid transparent;
       color: var(--text-muted);
       padding: 0.4rem 0.8rem;
@@ -257,7 +407,7 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
       align-items: center;
       gap: 6px;
     }}
-    .toolbar-btn:hover {{ background: rgba(255,255,255,0.08); color: #fff; }}
+    .toolbar-btn:hover {{ background: var(--toolbar-btn-hover); color: var(--text-main); }}
     .toolbar-btn.active {{
       background: rgba(99, 102, 241, 0.1);
       color: var(--accent);
@@ -313,7 +463,7 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
       text-align: left;
     }}
 
-    .filter-btn:hover {{ background: rgba(255,255,255,0.03); color: #fff; }}
+    .filter-btn:hover {{ background: var(--filter-btn-hover); color: var(--text-main); }}
     .filter-btn.active {{
       background: rgba(99, 102, 241, 0.1);
       color: var(--accent);
@@ -322,10 +472,11 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
     }}
 
     .badgish {{
-      background: rgba(255,255,255,0.05);
+      background: var(--tag-bg);
       border-radius: 99px;
       padding: 2px 8px;
       font-size: 0.7rem;
+      color: var(--tag-color);
     }}
     .filter-btn.active .badgish, .toolbar-btn.active .badgish {{ background: var(--accent); color: #fff; }}
 
@@ -339,10 +490,11 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
     .company-section {{ margin-bottom: 3rem; }}
     .company-name {{
       font-size: 1.1rem;
-      color: #fff;
+      color: var(--text-main);
       margin-bottom: 1rem;
       padding-bottom: 0.5rem;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 2px solid;
+      border-image: linear-gradient(90deg, var(--accent), transparent) 1;
       display: flex;
       align-items: center;
       gap: 0.8rem;
@@ -355,7 +507,7 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
     }}
 
     .job-card {{
-      background: rgba(255,255,255,0.02);
+      background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 1.2rem;
@@ -363,20 +515,25 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
       display: flex;
       flex-direction: column;
       position: relative;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
     }}
 
     .job-card:hover {{
-      background: rgba(255,255,255,0.04);
-      border-color: #444;
+      background: var(--card-bg-hover);
+      border-color: var(--card-border-hover);
+      box-shadow: 0 4px 24px var(--accent-glow);
       transform: translateY(-2px);
     }}
 
     .job-title {{
       font-size: 1rem;
-      color: #fff;
+      color: var(--text-main);
       font-weight: 600;
       margin-bottom: 0.5rem;
       line-height: 1.35;
+      letter-spacing: 0.018em;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -399,12 +556,12 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
 
     .tag {{
       font-size: 0.7rem;
-      background: rgba(255,255,255,0.05);
+      background: var(--tag-bg);
       padding: 2px 8px;
       border-radius: 4px;
-      color: #bbb;
+      color: var(--tag-color);
     }}
-    .source-tag {{ background: rgba(99,102,241,0.1); color: #a5b4fc; }}
+    .source-tag {{ background: var(--source-tag-bg); color: var(--source-tag-color); }}
 
     .apply-link {{
       margin-top: auto;
@@ -434,16 +591,21 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
     </div>
     <div class="stats">
       <div class="stat">
-        <span class="stat-val">{total_jobs}</span>
+        <span class="stat-val" id="header-job-count">{total_jobs}</span>
         <span class="stat-lbl">Jobs</span>
       </div>
       <div class="stat">
-        <span class="stat-val">{companies_count}</span>
+        <span class="stat-val" id="header-company-count">{companies_count}</span>
         <span class="stat-lbl">Companies</span>
       </div>
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+      <button class="refresh-btn" id="refresh-btn" onclick="startRefresh()">
+        🔄 Refresh
+      </button>
     </div>
   </header>
   
+  {new_banner_html}
   {toolbar_html}
 
   <div class="main-container">
@@ -525,13 +687,111 @@ def generate_html_report(jobs: list[dict], output_path: str) -> str:
             }}
         }});
         
-        // Update valid count display
+        // Update visible count in toolbar and header
         const countSpan = document.getElementById('visible-count');
-        if (countSpan) {{
-            countSpan.textContent = visibleCount + ' jobs visible';
-        }}
-        
+        if (countSpan) countSpan.textContent = visibleCount + ' jobs visible';
+        updateHeaderCount(visibleCount);
+
         document.querySelector('.content-area').scrollTop = 0;
+    }}
+
+    function updateHeaderCount(count) {{
+        const el = document.getElementById('header-job-count');
+        if (el) el.textContent = count;
+        // Also update visible company count
+        const compEl = document.getElementById('header-company-count');
+        if (compEl) {{
+            const visibleSections = document.querySelectorAll('.company-section:not([style*="display: none"])');
+            compEl.textContent = visibleSections.length;
+        }}
+    }}
+
+    // ── Theme Toggle ────────────────────────────────────────
+    function toggleTheme() {{
+      const isDark = !document.body.hasAttribute('data-theme');
+      if (isDark) {{
+        document.body.setAttribute('data-theme', 'light');
+        document.getElementById('theme-toggle').textContent = '☀️';
+        localStorage.setItem('js-theme', 'light');
+      }} else {{
+        document.body.removeAttribute('data-theme');
+        document.getElementById('theme-toggle').textContent = '🌙';
+        localStorage.setItem('js-theme', 'dark');
+      }}
+    }}
+
+    // Restore saved theme and sync counts on load
+    (function restoreTheme() {{
+      const saved = localStorage.getItem('js-theme');
+      if (saved === 'light') {{
+        document.body.setAttribute('data-theme', 'light');
+        document.getElementById('theme-toggle').textContent = '☀️';
+      }}
+      // Sync header counts to match what's actually visible
+      applyFilters();
+    }})();
+
+    // ── Server-aware Refresh ────────────────────────────────
+    (function detectServer() {{
+      fetch('/api/status')
+        .then(r => r.json())
+        .then(data => {{
+          const btn = document.getElementById('refresh-btn');
+          if (btn) {{
+            btn.style.display = 'flex';
+            if (data.running) {{
+              btn.disabled = true;
+              btn.innerHTML = '<span class="spinner"></span> Scraping...';
+              pollStatus();
+            }}
+          }}
+        }})
+        .catch(() => {{}});  // Not served from server — hide button
+    }})();
+
+    function startRefresh() {{
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Scraping...';
+
+      fetch('/api/refresh', {{ method: 'POST' }})
+        .then(r => r.json())
+        .then(data => {{
+          if (data.status === 'already_running') {{
+            // Already in progress, just poll
+          }}
+          pollStatus();
+        }})
+        .catch(err => {{
+          btn.innerHTML = '❌ Error';
+          setTimeout(() => {{
+            btn.innerHTML = '🔄 Refresh';
+            btn.disabled = false;
+          }}, 3000);
+        }});
+    }}
+
+    function pollStatus() {{
+      const poll = setInterval(() => {{
+        fetch('/api/status')
+          .then(r => r.json())
+          .then(data => {{
+            if (!data.running) {{
+              clearInterval(poll);
+              const btn = document.getElementById('refresh-btn');
+              if (data.last_error) {{
+                btn.innerHTML = '❌ Failed';
+                setTimeout(() => {{
+                  btn.innerHTML = '🔄 Refresh';
+                  btn.disabled = false;
+                }}, 3000);
+              }} else {{
+                btn.innerHTML = '✅ Done!';
+                setTimeout(() => window.location.reload(), 800);
+              }}
+            }}
+          }});
+      }}, 2000);
     }}
   </script>
 </body>

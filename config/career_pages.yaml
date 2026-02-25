@@ -76,3 +76,60 @@ career_pages:
     url: "https://boards.greenhouse.io/airbnb"
     type: api
     api_url: "https://boards-api.greenhouse.io/v1/boards/airbnb/jobs"
+
+  - name: "Stripe Careers"
+    url: "https://boards.greenhouse.io/stripe"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/stripe/jobs"
+
+  - name: "Datadog Careers"
+    url: "https://boards.greenhouse.io/datadog"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/datadog/jobs"
+
+  - name: "Discord Careers"
+    url: "https://boards.greenhouse.io/discord"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/discord/jobs"
+
+  - name: "Uber Freight Careers"
+    url: "https://boards.greenhouse.io/uberfreight"
+    type: api
+    api_url: "https://boards-api.greenhouse.io/v1/boards/uberfreight/jobs"
+
+  # ── Oracle Cloud HCM Sites ────────────────────────────────────
+  - name: "JPMorgan Chase Jobs"
+    url: "https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/requisitions?keyword=software+engineer&sortBy=POSTING_DATES_DESC"
+    type: api
+    api_url: "https://jpmc.fa.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+    keywords: "software engineer"
+
+  # ── Additional Workday Sites ────────────────────────────────
+  - name: "Morgan Stanley Careers"
+    url: "https://ms.wd5.myworkdayjobs.com/External?q=software+engineer"
+    type: api
+    api_url: "https://ms.wd5.myworkdayjobs.com/wday/cxs/ms/External/jobs"
+    keywords: "software engineer"
+
+  - name: "Fidelity Careers"
+    url: "https://fmr.wd1.myworkdayjobs.com/FidelityCareers?q=software+engineer"
+    type: api
+    api_url: "https://fmr.wd1.myworkdayjobs.com/wday/cxs/fmr/FidelityCareers/jobs"
+    keywords: "software engineer"
+
+  # ── Browser Sites (Playwright) ───────────────────────────────
+  - name: "Google Careers"
+    url: "https://www.google.com/about/careers/applications/jobs/results?q=software+engineer&location=United+States"
+    type: browser
+
+  - name: "Meta Careers"
+    url: "https://www.metacareers.com/jobs?q=software+engineer&location=United+States"
+    type: browser
+
+  - name: "Oracle Careers"
+    url: "https://careers.oracle.com/en/sites/jobsearch/jobs?keyword=software&location=United+States&locationId=300000000149325&mode=location&sortBy=POSTING_DATES_DESC"
+    type: browser
+
+  - name: "PayPal Careers"
+    url: "https://paypal.eightfold.ai/careers?query=software+engineer&location=United+States&pid=274915942389&sort_by=relevance"
+    type: browser

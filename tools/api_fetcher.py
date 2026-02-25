@@ -356,9 +356,12 @@ def parse_workday_jobs_api(api_response: dict, source_name: str, base_url: str) 
             except (ValueError, TypeError):
                 pass
 
+        # Derive company name from source_name (e.g. "Geico Careers" -> "Geico")
+        company = source_name.replace(" Careers", "").replace(" Jobs", "")
+
         jobs.append({
             "title": raw_job.get("title", "Unknown"),
-            "company": "GEICO",
+            "company": company,
             "location": location,
             "url": job_url,
             "description": raw_job.get("bulletFields", [""])[0] if raw_job.get("bulletFields") else "",
@@ -458,16 +461,10 @@ def parse_greenhouse_jobs_api(api_response: dict, source_name: str) -> list[dict
         # Build job URL
         job_url = raw_job.get("absolute_url", "")
 
-        # Parse updated_at timestamp (ISO 8601: "2026-02-15T14:30:00-05:00")
+        # Greenhouse only provides updated_at, not a true posted date.
+        # updated_at changes whenever the listing is edited, so using it as
+        # date_posted would misleadingly mark old jobs as "posted today".
         date_posted = ""
-        updated_at = raw_job.get("updated_at", "")
-        if updated_at:
-            try:
-                from datetime import datetime
-                dt = datetime.fromisoformat(updated_at)
-                date_posted = dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
-            except (ValueError, TypeError):
-                pass
 
         # Extract company name from source_name
         company = source_name.replace(" Careers", "").replace(" Jobs", "")
@@ -481,6 +478,73 @@ def parse_greenhouse_jobs_api(api_response: dict, source_name: str) -> list[dict
 
         jobs.append({
             "title": raw_job.get("title", "Unknown"),
+            "company": company,
+            "location": location,
+            "url": job_url,
+            "description": description,
+            "date_posted": date_posted,
+            "source": source_name,
+            "job_type": "Full-time",
+        })
+
+    return jobs
+
+
+def parse_oracle_hcm_jobs_api(api_response: dict, source_name: str, site_number: str = "CX_1001") -> list[dict]:
+    """
+    Parse an Oracle Cloud HCM recruitingCEJobRequisitions API response into job dicts.
+
+    Used by: JPMorgan Chase (jpmc.fa.oraclecloud.com)
+    The API returns nested JSON with items[0].requisitionList containing job objects.
+
+    Args:
+        api_response: Raw JSON response from the Oracle HCM API.
+        source_name: Name of the source for attribution.
+        site_number: Oracle HCM site number for building job URLs.
+
+    Returns:
+        List of job dicts ready for the normalizer.
+    """
+    jobs = []
+
+    items = api_response.get("items", [])
+    if not items:
+        return jobs
+
+    search_item = items[0]
+    raw_jobs = search_item.get("requisitionList", [])
+
+    for raw_job in raw_jobs:
+        # Filter to US jobs only
+        country = raw_job.get("PrimaryLocationCountry", "")
+        if country and country != "US":
+            continue
+
+        title = raw_job.get("Title", "Unknown")
+        location = raw_job.get("PrimaryLocation", "Not specified")
+
+        # Build job URL
+        job_id = raw_job.get("Id", "")
+        job_url = f"https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/{site_number}/job/{job_id}" if job_id else ""
+
+        # Parse posted date (format: "2026-02-24")
+        date_posted = ""
+        posted_date = raw_job.get("PostedDate", "")
+        if posted_date:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(posted_date, "%Y-%m-%d")
+                date_posted = dt.strftime("%Y-%m-%dT00:00:00+0000")
+            except (ValueError, TypeError):
+                date_posted = ""
+
+        description = raw_job.get("ShortDescriptionStr", "")
+
+        # Extract company name from source_name
+        company = source_name.replace(" Careers", "").replace(" Jobs", "")
+
+        jobs.append({
+            "title": title,
             "company": company,
             "location": location,
             "url": job_url,

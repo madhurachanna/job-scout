@@ -65,6 +65,8 @@ python run.py --schedule 30 --notify-email you@x.com  # Full auto mode
 | Pinterest (Greenhouse) | API | GET | Job board API |
 | Cloudflare (Greenhouse) | API | GET | Job board API |
 | Airbnb (Greenhouse) | API | GET | Job board API |
+| Oracle Careers | HTML | GET | Standard HTML scraping |
+| PayPal Careers | HTML | GET | Standard HTML scraping |
 | Any HTML career page | HTML + LLM | — | Requires LM Studio |
 
 ### Adding More Sites

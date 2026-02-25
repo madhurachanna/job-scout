@@ -7,7 +7,7 @@ Supports two modes:
 
 from tools.web_scraper import fetch_page
 from tools.text_extractor import extract_text, extract_job_links
-from tools.api_fetcher import fetch_jobs_from_api, fetch_jobs_from_api_post, parse_github_careers_api, parse_amazon_jobs_api, parse_microsoft_jobs_api, parse_workday_jobs_api, parse_lever_jobs_api, parse_greenhouse_jobs_api
+from tools.api_fetcher import fetch_jobs_from_api, fetch_jobs_from_api_post, parse_github_careers_api, parse_amazon_jobs_api, parse_microsoft_jobs_api, parse_workday_jobs_api, parse_lever_jobs_api, parse_greenhouse_jobs_api, parse_oracle_hcm_jobs_api
 from models.state import AgentState
 
 
@@ -41,6 +41,7 @@ def scraper_agent(state: AgentState) -> dict:
         is_workday = "myworkdayjobs.com" in api_url
         is_lever = "api.lever.co" in api_url
         is_greenhouse = "boards-api.greenhouse.io" in api_url
+        is_oracle_hcm = "oraclecloud.com" in api_url
 
         # Fetch all pages from the API
         all_jobs = []
@@ -252,6 +253,47 @@ def scraper_agent(state: AgentState) -> dict:
 
                 page_num += 1
 
+        elif is_oracle_hcm:
+            # Oracle Cloud HCM uses offset-based pagination with finder params
+            offset = 0
+            limit = 25
+
+            while True:
+                params = {
+                    "onlyData": "true",
+                    "expand": "requisitionList.secondaryLocations,flexFieldsFacet.values",
+                    "finder": f"findReqs;siteNumber=CX_1001,facetsList=LOCATIONS;WORK_LOCATIONS;WORKPLACE_TYPES;TITLES;CATEGORIES;ORGANIZATIONS;UNPOSTING_DATE,limit={limit},offset={offset},keyword={keywords or 'software engineer'},sortBy=POSTING_DATES_DESC",
+                }
+
+                result = fetch_jobs_from_api(api_url, params=params)
+
+                if not result["success"]:
+                    print(f"[Scraper] API failed: {result['error']}")
+                    return {
+                        "raw_html": "",
+                        "cleaned_text": "",
+                        "extracted_jobs": [],
+                        "errors": [f"API fetch failed for {name}: {result['error']}"],
+                    }
+
+                data = result["data"]
+                items = data.get("items", [])
+                total_count = items[0].get("TotalJobsCount", 0) if items else 0
+
+                page_jobs = parse_oracle_hcm_jobs_api(data, name)
+                all_jobs.extend(page_jobs)
+
+                print(f"[Scraper] Offset {offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
+                if len(page_jobs) == 0 or len(all_jobs) >= total_count:
+                    break
+
+                if offset >= 500:  # Safety limit: max 500 jobs
+                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    break
+
+                offset += limit
+
         else:
             # GitHub-style page-based pagination
             page_num = 1
@@ -301,6 +343,22 @@ def scraper_agent(state: AgentState) -> dict:
 
         # In API mode, we skip the parser (no LLM needed!) and go straight
         # to normalizer. We put the parsed jobs directly into extracted_jobs.
+        return {
+            "raw_html": "",
+            "cleaned_text": "",
+            "extracted_jobs": all_jobs,
+            "errors": [],
+        }
+
+    # ── HTML Scrape Mode ─────────────────────────────────────────
+    # ── Browser Mode (Playwright) ────────────────────────────────
+    if page_type == "browser":
+        print(f"[Scraper] 🌐 Browser mode for: {name}")
+        from tools.browser_scraper import scrape_with_browser
+
+        all_jobs = scrape_with_browser(url, name)
+        print(f"[Scraper] ✅ Browser scraped {len(all_jobs)} jobs from {name}")
+
         return {
             "raw_html": "",
             "cleaned_text": "",
