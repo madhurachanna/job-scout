@@ -2,6 +2,14 @@
 
 A multi-agent system that fetches job postings from career pages and job portals using **LangGraph** for orchestration and **Qwen3 8B** (via LM Studio) as the LLM backbone.
 
+## Screenshots
+
+| Dark Mode | Light Mode |
+|:---------:|:----------:|
+| ![Job Scout Dark Mode](s1.png) | ![Job Scout Light Mode](s2.png) |
+
+
+
 ## Architecture
 
 ```
