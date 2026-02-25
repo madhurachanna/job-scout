@@ -4,10 +4,12 @@ A multi-agent system that fetches job postings from career pages and job portals
 
 ## Screenshots
 
-| Dark Mode | Light Mode |
+| Light Mode | Dark Mode |
 |:---------:|:----------:|
-| ![Job Scout Dark Mode](s1.png) | ![Job Scout Light Mode](s2.png) |
+| ![Job Scout Light Mode](s1.png) | ![Job Scout Dark Mode](s3.png) |
 
+**Live TUI progress display**
+![Terminal Screenshot](s2.png)
 
 
 ## Architecture
