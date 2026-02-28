@@ -109,6 +109,10 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         2 Days <span class="badgish">{count_48h}</span>
       </button>
       <div class="toolbar-spacer"></div>
+      <div class="search-wrapper">
+        <input type="text" id="search-box" class="search-box" placeholder="🔍 Search job titles..." oninput="handleSearch(this.value)">
+        <button class="search-clear" id="search-clear" onclick="clearSearch()" title="Clear search">✕</button>
+      </div>
       <span class="toolbar-info" id="visible-count">{total_jobs} jobs visible</span>
     </div>
     """
@@ -419,6 +423,46 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     .toolbar-spacer {{ flex: 1; }}
     .toolbar-info {{ color: var(--text-muted); font-size: 0.8rem; }}
 
+    /* Search Box */
+    .search-box {{
+      background: var(--filter-btn-bg);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 0.4rem 0.8rem;
+      padding-right: 2rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+      transition: all 0.2s;
+      min-width: 200px;
+      font-family: inherit;
+    }}
+    .search-box::placeholder {{ color: var(--text-muted); opacity: 0.6; }}
+    .search-box:focus {{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }}
+    .search-wrapper {{
+      position: relative;
+      display: flex;
+      align-items: center;
+    }}
+    .search-clear {{
+      position: absolute;
+      right: 6px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 2px 4px;
+      border-radius: 4px;
+      line-height: 1;
+      display: none;
+      transition: color 0.2s;
+    }}
+    .search-clear:hover {{ color: var(--text-main); }}
+
     /* Layout */
     .main-container {{
       display: grid;
@@ -618,7 +662,28 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     let currentState = {{
         company: 'all',
         hours: 0, // 0 = all time
+        searchQuery: '',
     }};
+
+    let searchTimer = null;
+    function handleSearch(value) {{
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {{
+            currentState.searchQuery = value.toLowerCase().trim();
+            const clearBtn = document.getElementById('search-clear');
+            if (clearBtn) clearBtn.style.display = value.length > 0 ? 'block' : 'none';
+            applyFilters();
+        }}, 150);
+    }}
+
+    function clearSearch() {{
+        const input = document.getElementById('search-box');
+        if (input) input.value = '';
+        currentState.searchQuery = '';
+        const clearBtn = document.getElementById('search-clear');
+        if (clearBtn) clearBtn.style.display = 'none';
+        applyFilters();
+    }}
 
     function filterCompany(companyId, btn) {{
         // Update active class
@@ -652,6 +717,15 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
                 const ts = parseFloat(card.dataset.ts);
                 const age = nowTs - ts;
                 if (age > (currentState.hours * 3600)) {{
+                    visible = false;
+                }}
+            }}
+
+            // Search Filter — match against job title
+            if (visible && currentState.searchQuery) {{
+                const titleEl = card.querySelector('.job-title');
+                const title = titleEl ? titleEl.textContent.toLowerCase() : '';
+                if (!title.includes(currentState.searchQuery)) {{
                     visible = false;
                 }}
             }}
