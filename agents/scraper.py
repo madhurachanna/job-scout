@@ -7,7 +7,7 @@ Supports two modes:
 
 from tools.web_scraper import fetch_page
 from tools.text_extractor import extract_text, extract_job_links
-from tools.api_fetcher import fetch_jobs_from_api, fetch_jobs_from_api_post, parse_github_careers_api, parse_amazon_jobs_api, parse_microsoft_jobs_api, parse_workday_jobs_api, parse_lever_jobs_api, parse_greenhouse_jobs_api, parse_oracle_hcm_jobs_api
+from tools.api_fetcher import fetch_jobs_from_api, fetch_jobs_from_api_post, parse_github_careers_api, parse_amazon_jobs_api, parse_eightfold_jobs_api, parse_workday_jobs_api, parse_lever_jobs_api, parse_greenhouse_jobs_api, parse_oracle_hcm_jobs_api
 from models.state import AgentState
 
 
@@ -37,7 +37,7 @@ def scraper_agent(state: AgentState) -> dict:
 
         # Detect which API type we're dealing with
         is_amazon = "amazon.jobs" in api_url
-        is_microsoft = "microsoft.com" in api_url
+        is_eightfold = "pcsx/search" in api_url
         is_workday = "myworkdayjobs.com" in api_url
         is_lever = "api.lever.co" in api_url
         is_greenhouse = "boards-api.greenhouse.io" in api_url
@@ -90,16 +90,29 @@ def scraper_agent(state: AgentState) -> dict:
 
                 offset += limit
 
-        elif is_microsoft:
-            # Microsoft uses start-based pagination with domain param
+        elif is_eightfold:
+            # Eightfold (pcsx/search) uses start-based pagination with domain param
+            # Used by: Microsoft, Ford, and other Eightfold-powered career sites
             start = 0
             page_size = 20
 
+            # Use domain from config, or extract from API URL as fallback
+            eightfold_domain = current_page.get("domain", "")
+            if not eightfold_domain:
+                from urllib.parse import urlparse
+                parsed = urlparse(api_url)
+                eightfold_domain = parsed.hostname or ""
+
+            # Extract base URL for job links
+            from urllib.parse import urlparse as _urlparse
+            _parsed = _urlparse(api_url)
+            base_job_url = f"{_parsed.scheme}://{_parsed.hostname}"
+
             while True:
                 params = {
-                    "domain": "microsoft.com",
-                    "query": keywords or "Software Development",
-                    "location": "United States, Multiple Locations, Multiple Locations",
+                    "domain": eightfold_domain,
+                    "query": keywords or "Software Engineer",
+                    "location": "United States",
                     "start": start,
                     "sort_by": "timestamp",
                     "filter_include_remote": "1",
@@ -121,13 +134,16 @@ def scraper_agent(state: AgentState) -> dict:
                 positions = data.get("data", {}).get("positions", [])
 
                 # Parse jobs from this page
-                page_jobs = parse_microsoft_jobs_api(data, name)
+                page_jobs = parse_eightfold_jobs_api(data, name, base_job_url)
                 all_jobs.extend(page_jobs)
 
                 print(f"[Scraper] Start {start}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
 
-                # Check if we have all jobs
-                if len(all_jobs) >= total_count or len(positions) == 0:
+                # Check if we have all jobs (handle APIs that return total=0)
+                if len(positions) == 0:
+                    break
+
+                if total_count > 0 and len(all_jobs) >= total_count:
                     break
 
                 if start >= 500:  # Safety limit: max 500 jobs

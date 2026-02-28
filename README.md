@@ -37,7 +37,10 @@ cp .env.example .env
 # 4. Add career pages to scrape
 # Edit config/career_pages.yaml
 
-# 5. Run
+# 5. Run the web server
+python server.py              # Starts dashboard at http://localhost:8080
+
+# Or run CLI-only (no web UI)
 python run.py
 ```
 
@@ -64,7 +67,8 @@ python run.py --schedule 30 --notify-email you@x.com  # Full auto mode
 |----------|------|----------|-------|
 | GitHub Careers | API | GET | JSON response |
 | Amazon Jobs | API | GET | search.json endpoint |
-| Microsoft Careers | API | GET | pcsx/search endpoint |
+| Microsoft Careers | API | GET | pcsx/search endpoint (Eightfold) |
+| Ford Careers (Eightfold) | API | GET | pcsx/search endpoint |
 | GEICO (Workday) | API | POST | JSON body |
 | Capital One (Workday) | API | POST | JSON body |
 | Walmart (Workday) | API | POST | JSON body |
@@ -86,6 +90,8 @@ python run.py --schedule 30 --notify-email you@x.com  # Full auto mode
 **Greenhouse** — Any company using Greenhouse: add `boards-api.greenhouse.io/v1/boards/{board-token}/jobs`.
 
 **Workday** — Any company using Workday: add the `wday/cxs/.../jobs` endpoint.
+
+**Eightfold** — Any company using Eightfold (e.g., Ford, Microsoft): add the `/api/pcsx/search` endpoint.
 
 ## Scheduled Mode & Email Notifications
 
@@ -138,7 +144,13 @@ tail -f job_scout.log
 
 ## Output
 
-Results are saved to `output/` as JSON, CSV, and HTML files. The HTML report features a beautiful dashboard with company filtering and "New Job" indicators.
+Results are saved to `output/` as JSON, CSV, and HTML files. The HTML report features a beautiful dashboard with:
+
+- **Search bar** — Filter jobs by title in real time (e.g. "Software" shows all matching titles, "Software Engineer" narrows to that exact phrase)
+- **Company filter** — Sidebar to filter by company
+- **Time filter** — Toolbar buttons to filter by posting recency (1h, 3h, 6h, Today, 2 Days)
+- **"New Job" indicators** — Badges highlighting jobs discovered in the latest scrape
+- **Dark / Light mode** — Toggle between themes
 
 ## Agents
 

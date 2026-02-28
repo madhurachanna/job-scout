@@ -257,13 +257,16 @@ def parse_amazon_jobs_api(api_response: dict, source_name: str) -> list[dict]:
     return jobs
 
 
-def parse_microsoft_jobs_api(api_response: dict, source_name: str) -> list[dict]:
+def parse_eightfold_jobs_api(api_response: dict, source_name: str, base_url: str = "") -> list[dict]:
     """
-    Parse the Microsoft Careers pcsx/search API response into job dicts.
+    Parse an Eightfold pcsx/search API response into job dicts.
+
+    Used by: Microsoft, Ford, and other Eightfold-powered career sites.
 
     Args:
-        api_response: Raw JSON response from the Microsoft search API.
+        api_response: Raw JSON response from the Eightfold search API.
         source_name: Name of the source for attribution.
+        base_url: Base URL for building job links (e.g. "https://jobs.ford.com").
 
     Returns:
         List of job dicts ready for the normalizer.
@@ -273,6 +276,9 @@ def parse_microsoft_jobs_api(api_response: dict, source_name: str) -> list[dict]
     data = api_response.get("data", {})
     raw_jobs = data.get("positions", [])
 
+    # Derive company name from source_name (e.g. "Ford Careers" -> "Ford")
+    company = source_name.replace(" Careers", "").replace(" Jobs", "")
+
     for raw_job in raw_jobs:
         # Build location from locations array
         locations = raw_job.get("locations", [])
@@ -280,7 +286,7 @@ def parse_microsoft_jobs_api(api_response: dict, source_name: str) -> list[dict]
 
         # Build job URL
         position_url = raw_job.get("positionUrl", "")
-        job_url = f"https://apply.careers.microsoft.com{position_url}" if position_url else ""
+        job_url = f"{base_url}{position_url}" if position_url and base_url else ""
 
         # Parse posted timestamp (Unix seconds)
         date_posted = ""
@@ -295,11 +301,14 @@ def parse_microsoft_jobs_api(api_response: dict, source_name: str) -> list[dict]
 
         # Get display job ID for reference
         display_id = raw_job.get("displayJobId", "")
-        description = f"Microsoft Job ID: {display_id}" if display_id else ""
+        department = raw_job.get("department", "")
+        description = f"{department}" if department else ""
+        if display_id:
+            description = f"Job ID: {display_id}" + (f" | {department}" if department else "")
 
         jobs.append({
             "title": raw_job.get("name", "Unknown"),
-            "company": "Microsoft",
+            "company": company,
             "location": location,
             "url": job_url,
             "description": description,

@@ -34,7 +34,7 @@ def planner_agent(state: AgentState) -> dict:
             "status": "pending",
         }
         # Pass through optional fields (api_url, keywords, etc.)
-        for key in ("api_url", "keywords"):
+        for key in ("api_url", "keywords", "domain"):
             if key in page:
                 plan_entry[key] = page[key]
         scraping_plan.append(plan_entry)

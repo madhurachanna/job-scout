@@ -20,6 +20,7 @@ career_pages:
     type: api
     api_url: "https://apply.careers.microsoft.com/api/pcsx/search"
     keywords: "Software Development"
+    domain: "microsoft.com"
 
   # ── Workday Sites ──────────────────────────────────────────
   - name: "Geico Careers"
@@ -116,6 +117,14 @@ career_pages:
     type: api
     api_url: "https://fmr.wd1.myworkdayjobs.com/wday/cxs/fmr/FidelityCareers/jobs"
     keywords: "software engineer"
+
+  # ── Eightfold Sites ─────────────────────────────────────────
+  - name: "Ford Careers"
+    url: "https://jobs.ford.com/careers?query=Software+Engineer&start=0&location=United+States&pid=563568451397994&sort_by=timestamp&filter_include_remote=1"
+    type: api
+    api_url: "https://jobs.ford.com/api/pcsx/search"
+    keywords: "Software Engineer"
+    domain: "ford.com"
 
   # ── Browser Sites (Playwright) ───────────────────────────────
   - name: "Google Careers"
