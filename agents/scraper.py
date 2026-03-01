@@ -7,7 +7,7 @@ Supports two modes:
 
 from tools.web_scraper import fetch_page
 from tools.text_extractor import extract_text, extract_job_links
-from tools.api_fetcher import fetch_jobs_from_api, fetch_jobs_from_api_post, parse_github_careers_api, parse_amazon_jobs_api, parse_eightfold_jobs_api, parse_workday_jobs_api, parse_lever_jobs_api, parse_greenhouse_jobs_api, parse_oracle_hcm_jobs_api
+from tools.api_fetcher import fetch_jobs_from_api, fetch_jobs_from_api_post, parse_github_careers_api, parse_amazon_jobs_api, parse_eightfold_jobs_api, parse_workday_jobs_api, parse_lever_jobs_api, parse_greenhouse_jobs_api, parse_oracle_hcm_jobs_api, parse_phenom_jobs_api, parse_goldmansachs_jobs_api, parse_epam_jobs_api, fetch_apple_jobs, parse_apple_jobs_api, fetch_servicenow_jobs
 from models.state import AgentState
 
 
@@ -42,6 +42,11 @@ def scraper_agent(state: AgentState) -> dict:
         is_lever = "api.lever.co" in api_url
         is_greenhouse = "boards-api.greenhouse.io" in api_url
         is_oracle_hcm = "oraclecloud.com" in api_url
+        is_phenom = "/widgets" in api_url
+        is_goldman_sachs = "api-higher.gs.com" in api_url
+        is_epam = "careers.epam.com" in api_url
+        is_apple = "jobs.apple.com" in api_url
+        is_servicenow = "careers.servicenow.com" in api_url
 
         # Fetch all pages from the API
         all_jobs = []
@@ -274,11 +279,19 @@ def scraper_agent(state: AgentState) -> dict:
             offset = 0
             limit = 25
 
+            # Extract base URL for building job links
+            from urllib.parse import urlparse as _oracle_parse
+            _op = _oracle_parse(api_url)
+            oracle_base_url = f"{_op.scheme}://{_op.hostname}"
+
+            # Get siteNumber from config (defaults to CX_1001)
+            site_number = current_page.get("site_number", "CX_1001")
+
             while True:
                 params = {
                     "onlyData": "true",
                     "expand": "requisitionList.secondaryLocations,flexFieldsFacet.values",
-                    "finder": f"findReqs;siteNumber=CX_1001,facetsList=LOCATIONS;WORK_LOCATIONS;WORKPLACE_TYPES;TITLES;CATEGORIES;ORGANIZATIONS;UNPOSTING_DATE,limit={limit},offset={offset},keyword={keywords or 'software engineer'},sortBy=POSTING_DATES_DESC",
+                    "finder": f"findReqs;siteNumber={site_number},facetsList=LOCATIONS;WORK_LOCATIONS;WORKPLACE_TYPES;TITLES;CATEGORIES;ORGANIZATIONS;UNPOSTING_DATE,limit={limit},offset={offset},keyword={keywords or 'software engineer'},sortBy=POSTING_DATES_DESC",
                 }
 
                 result = fetch_jobs_from_api(api_url, params=params)
@@ -296,7 +309,8 @@ def scraper_agent(state: AgentState) -> dict:
                 items = data.get("items", [])
                 total_count = items[0].get("TotalJobsCount", 0) if items else 0
 
-                page_jobs = parse_oracle_hcm_jobs_api(data, name)
+                page_jobs = parse_oracle_hcm_jobs_api(data, name, oracle_base_url, site_number)
+
                 all_jobs.extend(page_jobs)
 
                 print(f"[Scraper] Offset {offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
@@ -309,6 +323,245 @@ def scraper_agent(state: AgentState) -> dict:
                     break
 
                 offset += limit
+
+        elif is_phenom:
+            # Phenom People (used by Adobe) — POST with refineSearch body
+            from_offset = 0
+            page_size = 20
+
+            from urllib.parse import urlparse as _phenom_parse
+            _pp = _phenom_parse(api_url)
+            base_url = f"{_pp.scheme}://{_pp.hostname}"
+
+            # Read country filter from config or default to US
+            country_filter = current_page.get("country", "United States of America")
+
+            while True:
+                body = {
+                    "lang": "en_us",
+                    "deviceType": "desktop",
+                    "country": "us",
+                    "pageName": "search-results",
+                    "ddoKey": "refineSearch",
+                    "sortBy": "",
+                    "from": from_offset,
+                    "jobs": True,
+                    "counts": True,
+                    "all_fields": ["category", "country", "state", "city", "type", "subtype"],
+                    "size": page_size,
+                    "clear498": False,
+                    "jdsource": "facets",
+                    "is498": True,
+                    "keywords": keywords or "Software Engineer",
+                    "global": True,
+                    "selected_fields": {
+                        "country": [country_filter]
+                    },
+                    "locationData": {},
+                }
+
+                result = fetch_jobs_from_api_post(
+                    api_url, json_body=body,
+                    headers={
+                        "Referer": current_page.get("url", base_url),
+                        "Origin": base_url,
+                    }
+                )
+
+                if not result["success"]:
+                    print(f"[Scraper] API failed: {result['error']}")
+                    return {
+                        "raw_html": "",
+                        "cleaned_text": "",
+                        "extracted_jobs": [],
+                        "errors": [f"API fetch failed for {name}: {result['error']}"],
+                    }
+
+                data = result["data"]
+                total_hits = data.get("refineSearch", {}).get("totalHits", 0)
+
+                page_jobs = parse_phenom_jobs_api(data, name, base_url)
+                all_jobs.extend(page_jobs)
+
+                print(f"[Scraper] Offset {from_offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_hits})")
+
+                if len(page_jobs) == 0 or len(all_jobs) >= total_hits:
+                    break
+
+                if from_offset >= 500:
+                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    break
+
+                from_offset += page_size
+
+        elif is_goldman_sachs:
+            # Goldman Sachs — GraphQL API with page-based pagination
+            page_num = 0
+            page_size = 20
+
+            while True:
+                body = {
+                    "operationName": "GetRoles",
+                    "variables": {
+                        "searchQueryInput": {
+                            "page": {"pageSize": page_size, "pageNumber": page_num},
+                            "sort": {"sortStrategy": "POSTED_DATE", "sortOrder": "DESC"},
+                            "filters": [],
+                            "experiences": ["EARLY_CAREER", "PROFESSIONAL"],
+                            "searchTerm": keywords or "Software Engineer",
+                        }
+                    },
+                    "query": "query GetRoles($searchQueryInput: RoleSearchQueryInput!) { roleSearch(searchQueryInput: $searchQueryInput) { totalCount items { roleId corporateTitle jobTitle jobFunction locations { primary state country city __typename } status division skills jobType { code description __typename } externalSource { sourceId __typename } __typename } __typename } }",
+                }
+
+                result = fetch_jobs_from_api_post(
+                    api_url, json_body=body,
+                    headers={
+                        "Origin": "https://higher.gs.com",
+                        "Referer": "https://higher.gs.com/",
+                    }
+                )
+
+                if not result["success"]:
+                    print(f"[Scraper] API failed: {result['error']}")
+                    return {
+                        "raw_html": "",
+                        "cleaned_text": "",
+                        "extracted_jobs": [],
+                        "errors": [f"API fetch failed for {name}: {result['error']}"],
+                    }
+
+                data = result["data"]
+                total_count = data.get("data", {}).get("roleSearch", {}).get("totalCount", 0)
+
+                page_jobs = parse_goldmansachs_jobs_api(data, name)
+                all_jobs.extend(page_jobs)
+
+                print(f"[Scraper] Page {page_num}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
+                if len(page_jobs) == 0 or (total_count > 0 and len(all_jobs) >= total_count):
+                    break
+
+                if len(all_jobs) >= 500:
+                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    break
+
+                page_num += 1
+
+        elif is_epam:
+            # EPAM Anywhere — custom REST API with x-anywhere-tenant header
+            from_offset = 0
+            page_size = 20
+
+            epam_headers = {
+                "x-anywhere-tenant": "anywhere",
+            }
+
+            while True:
+                params = {
+                    "q": keywords or "Software Engineer",
+                    "facets": "country=4000602900000005338",
+                    "from": from_offset,
+                    "size": page_size,
+                    "lang": "en",
+                    "websiteLocale": "en-us",
+                    "sortBy": "relevance;relocation=asc",
+                }
+
+                result = fetch_jobs_from_api(api_url, params=params, headers=epam_headers)
+
+                if not result["success"]:
+                    print(f"[Scraper] API failed: {result['error']}")
+                    return {
+                        "raw_html": "",
+                        "cleaned_text": "",
+                        "extracted_jobs": [],
+                        "errors": [f"API fetch failed for {name}: {result['error']}"],
+                    }
+
+                data = result["data"]
+                total_count = data.get("data", {}).get("total", 0)
+
+                page_jobs = parse_epam_jobs_api(data, name)
+                all_jobs.extend(page_jobs)
+
+                print(f"[Scraper] Offset {from_offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
+                if len(page_jobs) == 0 or (total_count > 0 and len(all_jobs) >= total_count):
+                    break
+
+                if from_offset >= 500:
+                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    break
+
+                from_offset += page_size
+
+        elif is_apple:
+            # Apple — custom API with CSRF token flow
+            page_num = 1
+
+            while True:
+                result = fetch_apple_jobs(keywords=keywords or "Software Engineer", page=page_num)
+
+                if not result["success"]:
+                    print(f"[Scraper] API failed: {result['error']}")
+                    return {
+                        "raw_html": "",
+                        "cleaned_text": "",
+                        "extracted_jobs": [],
+                        "errors": [f"API fetch failed for {name}: {result['error']}"],
+                    }
+
+                data = result["data"]
+                res = data.get("res", data)
+                total_count = res.get("totalRecords", 0)
+
+                page_jobs = parse_apple_jobs_api(data, name)
+                all_jobs.extend(page_jobs)
+
+                print(f"[Scraper] Page {page_num}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
+                if len(page_jobs) == 0 or (total_count > 0 and len(all_jobs) >= total_count):
+                    break
+
+                if len(all_jobs) >= 500:
+                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    break
+
+                page_num += 1
+
+        elif is_servicenow:
+            # ServiceNow — SSR HTML scraping with page-based pagination
+            page_num = 1
+            page_size = 20
+
+            while True:
+                result = fetch_servicenow_jobs(keywords=keywords or "Software Engineer", page=page_num, page_size=page_size)
+
+                if not result["success"]:
+                    print(f"[Scraper] API failed: {result['error']}")
+                    return {
+                        "raw_html": "",
+                        "cleaned_text": "",
+                        "extracted_jobs": [],
+                        "errors": [f"Fetch failed for {name}: {result['error']}"],
+                    }
+
+                data = result["data"]
+                total_count = data.get("total", 0)
+                page_jobs = data.get("jobs", [])
+                all_jobs.extend(page_jobs)
+
+                print(f"[Scraper] Page {page_num}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
+                if len(page_jobs) == 0 or (total_count > 0 and len(all_jobs) >= total_count):
+                    break
+
+                if len(all_jobs) >= 500:
+                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    break
+
+                page_num += 1
 
         else:
             # GitHub-style page-based pagination

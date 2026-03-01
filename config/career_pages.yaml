@@ -126,6 +126,49 @@ career_pages:
     keywords: "Software Engineer"
     domain: "ford.com"
 
+  # ── Phenom People Sites ────────────────────────────────────
+  - name: "Adobe Careers"
+    url: "https://careers.adobe.com/us/en/search-results?keywords=Software%20Development%20Engineer"
+    type: api
+    api_url: "https://careers.adobe.com/widgets"
+    keywords: "Software Development Engineer"
+    country: "United States of America"
+
+  - name: "Cisco Careers"
+    url: "https://careers.cisco.com/global/en/search-results?keywords=Software%20Engineer"
+    type: api
+    api_url: "https://careers.cisco.com/widgets"
+    keywords: "Software Engineer"
+    country: "United States of America"
+
+  # ── Goldman Sachs (GraphQL) ────────────────────────────────
+  - name: "Goldman Sachs Careers"
+    url: "https://higher.gs.com/results?&page=1&search=Software%20Engineer&sort=POSTED_DATE"
+    type: api
+    api_url: "https://api-higher.gs.com/gateway/api/v1/graphql"
+    keywords: "Software Engineer"
+
+  # ── EPAM (Anywhere API) ─────────────────────────────────────
+  - name: "EPAM Careers"
+    url: "https://careers.epam.com/en/jobs?country=4000602900000005338&search=Software%20Engineer&sort_by=relevance"
+    type: api
+    api_url: "https://careers.epam.com/api/jobs/v2/search/careers-i18n"
+    keywords: "Software Engineer"
+
+  # ── Apple (Custom CSRF API) ─────────────────────────────────
+  - name: "Apple Careers"
+    url: "https://jobs.apple.com/en-us/search?search=Software+Engineer&sort=relevance&location=united-states-USA"
+    type: api
+    api_url: "https://jobs.apple.com/api/v1/search"
+    keywords: "Software Engineer"
+
+  # ── ServiceNow (SSR HTML Scraping) ──────────────────────────
+  - name: "ServiceNow Careers"
+    url: "https://careers.servicenow.com/jobs/?search=Software+Engineer&country=United+States&pagesize=20#results"
+    type: api
+    api_url: "https://careers.servicenow.com/jobs/"
+    keywords: "Software Engineer"
+
   # ── Browser Sites (Playwright) ───────────────────────────────
   - name: "Google Careers"
     url: "https://www.google.com/about/careers/applications/jobs/results?q=software+engineer&location=United+States"
@@ -136,9 +179,14 @@ career_pages:
     type: browser
 
   - name: "Oracle Careers"
-    url: "https://careers.oracle.com/en/sites/jobsearch/jobs?keyword=software&location=United+States&locationId=300000000149325&mode=location&sortBy=POSTING_DATES_DESC"
-    type: browser
+    url: "https://careers.oracle.com/en/sites/jobsearch/jobs?keyword=Software+Engineer&location=United+States&locationId=300000000149325&mode=location&sortBy=POSTING_DATES_DESC"
+    type: api
+    api_url: "https://eeho.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+    keywords: "Software Engineer"
 
   - name: "PayPal Careers"
     url: "https://paypal.eightfold.ai/careers?query=software+engineer&location=United+States&pid=274915942389&sort_by=relevance"
-    type: browser
+    type: api
+    api_url: "https://paypal.eightfold.ai/api/pcsx/search"
+    keywords: "Software Engineer"
+    domain: "paypal.com"

@@ -41,6 +41,10 @@ def load_career_pages(yaml_path: str) -> list[dict]:
                 entry["keywords"] = page["keywords"]
             if "domain" in page:
                 entry["domain"] = page["domain"]
+            if "country" in page:
+                entry["country"] = page["country"]
+            if "site_number" in page:
+                entry["site_number"] = page["site_number"]
             validated.append(entry)
 
     return validated

@@ -69,6 +69,12 @@ python run.py --schedule 30 --notify-email you@x.com  # Full auto mode
 | Amazon Jobs | API | GET | search.json endpoint |
 | Microsoft Careers | API | GET | pcsx/search endpoint (Eightfold) |
 | Ford Careers (Eightfold) | API | GET | pcsx/search endpoint |
+| Adobe Careers (Phenom) | API | POST | Phenom People widget API |
+| Cisco Careers (Phenom) | API | POST | Phenom People widget API |
+| Goldman Sachs | API | POST | GraphQL API |
+| EPAM Careers | API | GET | Anywhere search API |
+| Apple Careers | API | POST | Custom CSRF + search API |
+| ServiceNow Careers | API | GET | SSR HTML scraping |
 | GEICO (Workday) | API | POST | JSON body |
 | Capital One (Workday) | API | POST | JSON body |
 | Walmart (Workday) | API | POST | JSON body |
@@ -79,8 +85,8 @@ python run.py --schedule 30 --notify-email you@x.com  # Full auto mode
 | Pinterest (Greenhouse) | API | GET | Job board API |
 | Cloudflare (Greenhouse) | API | GET | Job board API |
 | Airbnb (Greenhouse) | API | GET | Job board API |
-| Oracle Careers | HTML | GET | Standard HTML scraping |
-| PayPal Careers | HTML | GET | Standard HTML scraping |
+| Oracle Careers (Oracle HCM) | API | GET | Oracle Cloud HCM REST API |
+| PayPal Careers (Eightfold) | API | GET | pcsx/search endpoint |
 | Any HTML career page | HTML + LLM | — | Requires LM Studio |
 
 ### Adding More Sites
@@ -92,6 +98,10 @@ python run.py --schedule 30 --notify-email you@x.com  # Full auto mode
 **Workday** — Any company using Workday: add the `wday/cxs/.../jobs` endpoint.
 
 **Eightfold** — Any company using Eightfold (e.g., Ford, Microsoft): add the `/api/pcsx/search` endpoint.
+
+**Phenom People** — Any company using Phenom (e.g., Adobe): add the `/widgets` api_url with `country` filter.
+
+**Goldman Sachs** — Uses a custom GraphQL API at `api-higher.gs.com/gateway/api/v1/graphql`.
 
 ## Scheduled Mode & Email Notifications
 
