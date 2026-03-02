@@ -105,6 +105,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            cd /home/${{ secrets.EC2_USER }}/job-scout
             echo "⏳ Waiting for server to become healthy..."
             for i in $(seq 1 12); do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/status || echo "000")
