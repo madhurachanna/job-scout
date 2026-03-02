@@ -19,42 +19,42 @@ class Settings:
 
     # LLM Configuration (LM Studio)
     llm_base_url: str = field(
-        default_factory=lambda: os.getenv("LLM_BASE_URL", "http://localhost:1234/v1")
+        default_factory=lambda: os.getenv("LLM_BASE_URL") or "http://localhost:1234/v1"
     )
     llm_model_name: str = field(
-        default_factory=lambda: os.getenv("LLM_MODEL_NAME", "qwen3-8b")
+        default_factory=lambda: os.getenv("LLM_MODEL_NAME") or "qwen3-8b"
     )
     llm_temperature: float = field(
-        default_factory=lambda: float(os.getenv("LLM_TEMPERATURE", "0.7"))
+        default_factory=lambda: float(os.getenv("LLM_TEMPERATURE") or "0.7")
     )
     llm_max_tokens: int = field(
-        default_factory=lambda: int(os.getenv("LLM_MAX_TOKENS", "2048"))
+        default_factory=lambda: int(os.getenv("LLM_MAX_TOKENS") or "2048")
     )
 
     # Scraping Configuration
     request_timeout: int = field(
-        default_factory=lambda: int(os.getenv("REQUEST_TIMEOUT", "30"))
+        default_factory=lambda: int(os.getenv("REQUEST_TIMEOUT") or "30")
     )
     max_retries: int = field(
-        default_factory=lambda: int(os.getenv("MAX_RETRIES", "3"))
+        default_factory=lambda: int(os.getenv("MAX_RETRIES") or "3")
     )
 
     # Paths
     output_dir: str = field(
-        default_factory=lambda: os.getenv("OUTPUT_DIR", "output")
+        default_factory=lambda: os.getenv("OUTPUT_DIR") or "output"
     )
 
     # Feature Flags
     skip_normalization: bool = field(
-        default_factory=lambda: os.getenv("SKIP_NORMALIZATION", "false").lower() == "true"
+        default_factory=lambda: (os.getenv("SKIP_NORMALIZATION") or "false").lower() == "true"
     )
 
     # Email / SMTP Configuration
     smtp_host: str = field(
-        default_factory=lambda: os.getenv("SMTP_HOST", "smtp.gmail.com")
+        default_factory=lambda: os.getenv("SMTP_HOST") or "smtp.gmail.com"
     )
     smtp_port: int = field(
-        default_factory=lambda: int(os.getenv("SMTP_PORT", "587"))
+        default_factory=lambda: int(os.getenv("SMTP_PORT") or "587")
     )
     smtp_user: str = field(
         default_factory=lambda: os.getenv("SMTP_USER", "")
