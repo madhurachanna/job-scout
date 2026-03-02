@@ -18,13 +18,13 @@ jobs:
         run: docker build -t job-scout:latest .
 
       - name: Save image to tarball
-        run: docker save job-scout:latest | gzip > /tmp/job-scout.tar.gz
+        run: docker save job-scout:latest | gzip > job-scout.tar.gz
 
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
           name: job-scout-image
-          path: /tmp/job-scout.tar.gz
+          path: job-scout.tar.gz
           retention-days: 1
 
   # ── 2. Deploy to EC2 ─────────────────────────────────────────────
@@ -41,7 +41,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: job-scout-image
-          path: /tmp
+          path: .
 
       - name: Copy image to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -49,7 +49,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: /tmp/job-scout.tar.gz
+          source: job-scout.tar.gz
           target: /home/${{ secrets.EC2_USER }}/job-scout/
 
       - name: Copy docker-compose.yml to EC2
@@ -90,7 +90,7 @@ jobs:
             mkdir -p data output
 
             # ── Load the new Docker image ────────────────────────
-            docker load < /tmp/job-scout.tar.gz
+            docker load < job-scout.tar.gz
 
             # ── Bring up the container ───────────────────────────
             docker compose down --remove-orphans || true
