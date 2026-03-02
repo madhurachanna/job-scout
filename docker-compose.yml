@@ -1,0 +1,28 @@
+services:
+  job-scout:
+    image: job-scout:latest          # built and loaded by CI/CD pipeline
+    container_name: job-scout
+    restart: unless-stopped
+
+    ports:
+      # Port 8080 → 8080 (direct access: http://<ip>:8080)
+      - "8080:8080"
+      # Port 80   → 8080 (standard HTTP, no port needed in URL)
+      - "80:8080"
+
+    env_file:
+      # .env is written to the EC2 instance by the deploy workflow
+      # It should contain all variables from .env.example
+      - .env
+
+    volumes:
+      # Persist the SQLite seen-jobs DB and HTML report across redeploys
+      - ./data:/app/data
+      - ./output:/app/output
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

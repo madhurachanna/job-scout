@@ -21,6 +21,8 @@ env/
 # ==== Output (generated at runtime) ====
 output/
 data/
+*.db
+*.html
 
 # ==== IDE / Editors ====
 .vscode/

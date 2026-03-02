@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Env / secrets (injected at runtime via docker-compose env_file)
+.env
+
+# Local data / output (mounted as volumes at runtime)
+data/
+output/
+*.db
+*.html
+jobs_report.html
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Screenshots / assets not needed in image
+*.png
