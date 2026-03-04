@@ -124,6 +124,13 @@ class ReusableHTTPServer(HTTPServer):
     """HTTPServer that allows port reuse to avoid 'Address already in use' errors."""
     allow_reuse_address = True
 
+    def handle_error(self, request, client_address):
+        """Silently ignore client disconnects (BrokenPipe) — normal with status polling."""
+        import sys
+        if sys.exc_info()[0] in (BrokenPipeError, ConnectionResetError):
+            return  # Client closed the connection early — not a real error
+        super().handle_error(request, client_address)
+
 
 class JobScoutHandler(SimpleHTTPRequestHandler):
     """Custom HTTP handler for Job Scout web server."""
@@ -158,11 +165,13 @@ class JobScoutHandler(SimpleHTTPRequestHandler):
         with open(html_path, "r") as f:
             content = f.read()
 
+        encoded = content.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
-        self.wfile.write(content.encode("utf-8"))
+        self.wfile.write(encoded)
 
     def _serve_welcome_page(self):
         """Serve a simple page when no jobs report exists yet."""
