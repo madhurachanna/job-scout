@@ -118,8 +118,20 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     """
 
     # Build sidebar HTML (Companies Only)
+    new_tab_btn_html = ""
+    if new_count > 0:
+        new_tab_btn_html = f"""
+        <button class="filter-btn new-tab-btn" id="new-tab-btn" onclick="filterNew(this)">
+          <span>🆕 New</span>
+          <span class="badgish new-badgish">{new_count}</span>
+        </button>"""
+
     sidebar_html = f"""
     <div class="sidebar">
+      <div class="filter-group">
+        <h3 class="filter-title">View</h3>
+        {new_tab_btn_html}
+      </div>
       <div class="filter-group">
         <h3 class="filter-title">Companies</h3>
         <button class="filter-btn comp-filter active" onclick="filterCompany('all', this)">
@@ -183,7 +195,8 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
             is_new = job_dedup_key in new_keys
             new_badge = '<span class="new-badge">New</span>' if is_new else ''
 
-            job_cards_html += f"""    <a {card_href}{card_target}class="job-card" data-ts="{ts}">
+            new_attr = 'data-new="1"' if is_new else 'data-new="0"'
+            job_cards_html += f"""    <a {card_href}{card_target}class="job-card" data-ts="{ts}" {new_attr}>
       <div class="job-header">
         <h3 class="job-title">{title}{new_badge}</h3>
       </div>
@@ -372,6 +385,36 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
       text-transform: uppercase;
       margin-left: 4px;
       flex-shrink: 0;
+    }}
+
+    /* New tab button in sidebar */
+    .new-badgish {{
+      background: var(--accent) !important;
+      color: #fff !important;
+    }}
+    .new-tab-btn {{
+      border: 1px solid rgba(249,115,22,0.3);
+      color: var(--accent) !important;
+      font-weight: 600;
+    }}
+    .new-tab-btn:hover {{
+      background: rgba(249,115,22,0.12) !important;
+      border-color: var(--accent) !important;
+    }}
+    .new-tab-btn.active {{
+      background: rgba(249,115,22,0.18) !important;
+      border-color: var(--accent) !important;
+      box-shadow: 0 0 12px rgba(249,115,22,0.25);
+    }}
+
+    /* Disabled state for time filters when New mode is active */
+    .new-mode-active .time-filter {{
+      opacity: 0.3;
+      pointer-events: none;
+      cursor: not-allowed;
+    }}
+    .new-mode-active .toolbar-label {{
+      opacity: 0.3;
     }}
 
     
@@ -663,6 +706,7 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         company: 'all',
         hours: 0, // 0 = all time
         searchQuery: '',
+        newOnly: false,
     }};
 
     let searchTimer = null;
@@ -685,8 +729,44 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         applyFilters();
     }}
 
+    function filterNew(btn) {{
+        const isActive = !btn.classList.contains('active');
+        btn.classList.toggle('active', isActive);
+        currentState.newOnly = isActive;
+
+        // Apply/remove the disabled-filters class to body
+        document.body.classList.toggle('new-mode-active', isActive);
+
+        if (isActive) {{
+            // Reset company & time filter visuals
+            currentState.company = 'all';
+            currentState.hours = 0;
+            currentState.searchQuery = '';
+            document.querySelectorAll('.comp-filter').forEach(b => b.classList.remove('active'));
+            const allCompBtn = document.querySelector('.comp-filter');
+            if (allCompBtn) allCompBtn.classList.add('active');
+            document.querySelectorAll('.time-filter').forEach(b => b.classList.remove('active'));
+            const allTimeBtn = document.querySelector('.time-filter');
+            if (allTimeBtn) allTimeBtn.classList.add('active');
+            const searchBox = document.getElementById('search-box');
+            if (searchBox) searchBox.value = '';
+            const clearBtn = document.getElementById('search-clear');
+            if (clearBtn) clearBtn.style.display = 'none';
+        }}
+        applyFilters();
+    }}
+
+    function _deactivateNewTab() {{
+        const newBtn = document.getElementById('new-tab-btn');
+        if (newBtn && newBtn.classList.contains('active')) {{
+            newBtn.classList.remove('active');
+            currentState.newOnly = false;
+            document.body.classList.remove('new-mode-active');
+        }}
+    }}
+
     function filterCompany(companyId, btn) {{
-        // Update active class
+        // Update active class (stays in New mode if active)
         document.querySelectorAll('.comp-filter').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         
@@ -695,6 +775,7 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     }}
     
     function filterTime(hours, btn) {{
+        _deactivateNewTab();
         document.querySelectorAll('.time-filter').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         
@@ -711,6 +792,13 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         // Loop all cards and determine visibility
         allCards.forEach(card => {{
             let visible = true;
+
+            // New-only mode: show only new jobs, skip all other filters
+            if (currentState.newOnly) {{
+                visible = card.dataset.new === '1';
+                card.style.display = visible ? 'flex' : 'none';
+                return;
+            }}
             
             // Time Filter
             if (currentState.hours > 0) {{
@@ -731,20 +819,11 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
             }}
             
             card.style.display = visible ? 'flex' : 'none';
-            
-            // Also check if card belongs to active company filter
-            // This is tricky because company filter applies to section.
-            // But we need to count total visible cards.
-            
-            // Actually, we can just do a second pass after hiding sections?
-            // Or simpler: check context.
-            // Let's assume company filter logic handles section visibility,
-            // and we count visible cards in visible sections.
         }});
         
         // Hide empty sections / Show matching company sections
         sections.forEach(section => {{
-            // First check company filter
+            // Apply company filter (works in both normal and newOnly mode)
             if (currentState.company !== 'all' && section.dataset.comp !== currentState.company) {{
                 section.style.display = 'none';
                 return;
@@ -752,7 +831,7 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
             
             section.style.display = 'block';
             
-            // Check if any visible children (filtered by time)
+            // Check if any visible children
             const visibleCards = section.querySelectorAll('.job-card[style="display: flex;"]');
             if (visibleCards.length === 0) {{
                 section.style.display = 'none';
