@@ -127,7 +127,8 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         </button>"""
 
     sidebar_html = f"""
-    <div class="sidebar">
+    <div class="sidebar" id="main-sidebar">
+      <button class="sidebar-close" onclick="toggleSidebar()">✕ Close Filters</button>
       <div class="filter-group">
         <h3 class="filter-title">View</h3>
         {new_tab_btn_html}
@@ -661,11 +662,86 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     }}
     .apply-link:hover {{ color: var(--accent-hover); }}
 
-    /* Responsive */
+    /* ── Mobile / Responsive ─────────────────────────────── */
+    .hamburger {{
+      display: none;
+      background: var(--filter-btn-bg);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      align-items: center; justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }}
+    .hamburger:hover {{ background: var(--filter-btn-hover); }}
+
+    .sidebar-close {{
+      display: none;
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.6rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      transition: all 0.2s;
+    }}
+    .sidebar-close:hover {{ background: var(--filter-btn-hover); color: var(--text-main); }}
+
+    .sidebar-backdrop {{
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 40;
+    }}
+
     @media (max-width: 800px) {{
+      .hamburger {{ display: flex; }}
+      .sidebar-close {{ display: block; }}
+
       .main-container {{ grid-template-columns: 1fr; }}
-      .sidebar {{ display: none; }} /* Mobile menu could be added later */
-      .toolbar {{ flex-wrap: wrap; }}
+
+      .sidebar {{
+        position: fixed;
+        top: 0; left: -280px;
+        width: 280px;
+        height: 100%;
+        z-index: 50;
+        transition: left 0.28s ease;
+        box-shadow: 4px 0 32px rgba(0,0,0,0.4);
+      }}
+      .sidebar.open {{
+        left: 0;
+      }}
+      .sidebar-backdrop.open {{
+        display: block;
+      }}
+
+      .toolbar {{
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.6rem 1rem;
+      }}
+      .toolbar-label {{ display: none; }}
+      .toolbar-spacer {{ display: none; }}
+      .search-box {{ min-width: 0; width: 100%; }}
+      .search-wrapper {{ width: 100%; }}
+      .toolbar-info {{ width: 100%; text-align: right; font-size: 0.75rem; }}
+
+      .header {{ padding: 0.8rem 1rem; }}
+      .brand h1 {{ font-size: 1rem; }}
+      .subtitle {{ display: none; }}
+      .stats {{ gap: 0.8rem; }}
+      .stat-val {{ font-size: 0.95rem; }}
+
+      .content-area {{ padding: 1rem; }}
+      .job-grid {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -673,6 +749,7 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
 
   <header class="header">
     <div class="brand">
+      <button class="hamburger" id="hamburger-btn" onclick="toggleSidebar()" title="Filters">☰</button>
       <h1>🔍 <span>Job Scout</span></h1>
       <div class="subtitle">Scraped on {timestamp_str}</div>
     </div>
@@ -694,6 +771,13 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
   
   {new_banner_html}
   {toolbar_html}
+
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
+  <div id="scraping-banner" style="display:none; background:linear-gradient(135deg,#f97316,#ea580c); color:#fff; padding:0.55rem 2rem; font-size:0.88rem; font-weight:600; display:none; align-items:center; gap:0.6rem; flex-shrink:0;">
+    <span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;"></span>
+    Scraping in progress — new jobs will appear when complete.
+  </div>
 
   <div class="main-container">
     {sidebar_html}
@@ -766,7 +850,8 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     }}
 
     function filterCompany(companyId, btn) {{
-        // Update active class (stays in New mode if active)
+        _deactivateNewTab();
+        // Update active class
         document.querySelectorAll('.comp-filter').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         
@@ -885,6 +970,11 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     }})();
 
     // ── Server-aware Refresh ────────────────────────────────
+    function showScrapingBanner(show) {{
+      const b = document.getElementById('scraping-banner');
+      if (b) b.style.display = show ? 'flex' : 'none';
+    }}
+
     (function detectServer() {{
       fetch('/api/status')
         .then(r => r.json())
@@ -895,6 +985,7 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
             if (data.running) {{
               btn.disabled = true;
               btn.innerHTML = '<span class="spinner"></span> Scraping...';
+              showScrapingBanner(true);
               pollStatus();
             }}
           }}
@@ -902,10 +993,21 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         .catch(() => {{}});  // Not served from server — hide button
     }})();
 
+    // ── Mobile Sidebar ──────────────────────────────────────
+    function toggleSidebar() {{
+      const sidebar = document.getElementById('main-sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (!sidebar) return;
+      const isOpen = sidebar.classList.toggle('open');
+      backdrop.classList.toggle('open', isOpen);
+      document.body.style.overflow = isOpen ? 'hidden' : '';
+    }}
+
     function startRefresh() {{
       const btn = document.getElementById('refresh-btn');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Scraping...';
+      showScrapingBanner(true);
 
       fetch('/api/refresh', {{ method: 'POST' }})
         .then(r => r.json())
@@ -931,6 +1033,7 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
           .then(data => {{
             if (!data.running) {{
               clearInterval(poll);
+              showScrapingBanner(false);
               const btn = document.getElementById('refresh-btn');
               if (data.last_error) {{
                 btn.innerHTML = '❌ Failed';
