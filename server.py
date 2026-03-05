@@ -15,6 +15,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+from socketserver import ThreadingMixIn
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -120,15 +121,31 @@ def run_scraper_background(config_path: str):
 
 
 # ── HTTP Handler ──────────────────────────────────────────────
-class ReusableHTTPServer(HTTPServer):
-    """HTTPServer that allows port reuse to avoid 'Address already in use' errors."""
+class ReusableHTTPServer(ThreadingMixIn, HTTPServer):
+    """HTTPServer that handles each request in its own thread.
+
+    ThreadingMixIn ensures that slow or stuck requests (e.g. bot HTTPS probes
+    timing out on an HTTP server) never block other users from connecting.
+    """
     allow_reuse_address = True
+    daemon_threads = True  # Threads are killed cleanly when server stops
+
+    def server_bind(self):
+        """Set a short socket timeout so bot HTTPS probes fail fast."""
+        super().server_bind()
+        self.socket.settimeout(None)  # Keep accept() blocking
+
+    def get_request(self):
+        """Apply a per-connection timeout so stuck clients don't hang a thread forever."""
+        request, client_address = super().get_request()
+        request.settimeout(15)  # 15s max per connection — kills stalled bot probes
+        return request, client_address
 
     def handle_error(self, request, client_address):
         """Silently ignore client disconnects (BrokenPipe) — normal with status polling."""
         import sys
-        if sys.exc_info()[0] in (BrokenPipeError, ConnectionResetError):
-            return  # Client closed the connection early — not a real error
+        if sys.exc_info()[0] in (BrokenPipeError, ConnectionResetError, TimeoutError):
+            return  # Client closed early or timed out — not a real error
         super().handle_error(request, client_address)
 
 
