@@ -203,7 +203,7 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
       </div>
       <div class="job-meta">
         {f'<span class="meta-item">📍 {location}</span>' if location else ''}
-        {f'<span class="meta-item">📅 {date_display}</span>' if date_display else ''}
+        {f'<span class="meta-item job-date" data-iso="{date_posted}"></span>' if date_posted else ''}
       </div>
       <div class="job-tags">
          {f'<span class="tag">{job_type}</span>' if job_type else ''}
@@ -965,6 +965,19 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         document.body.setAttribute('data-theme', 'light');
         document.getElementById('theme-toggle').textContent = '☀️';
       }}
+      // Format all dates in browser's local timezone
+      document.querySelectorAll('.job-date[data-iso]').forEach(el => {{
+        const iso = el.dataset.iso;
+        if (!iso) return;
+        try {{
+          const d = new Date(iso);
+          if (isNaN(d)) return;
+          el.textContent = '📅 ' + d.toLocaleDateString('en-US', {{
+            month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit'
+          }});
+        }} catch(e) {{}}
+      }});
       // Sync header counts to match what's actually visible
       applyFilters();
     }})();
