@@ -5,7 +5,7 @@ HTML Report Generator — creates a beautiful static HTML page for job listings.
 from datetime import datetime, timezone
 
 
-def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = None) -> str:
+def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = None, scrape_results: dict = None) -> str:
     """
     Generate a static HTML page displaying all job listings with a sidebar filter.
 
@@ -15,6 +15,8 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         new_keys: Optional set of dedup keys (title|company|location) for jobs
                   discovered in the latest scrape. These get a NEW badge and
                   trigger the "N new jobs" banner.
+        scrape_results: Optional dict mapping company name ->
+                        {type, state, jobs, error} for collapsible banner.
 
     Returns:
         Path to the generated HTML file.
@@ -25,17 +27,67 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     timestamp_str = now_utc.strftime("%B %d, %Y") # Fallback (date only, no time)
     new_keys = new_keys or set()
     new_count = len(new_keys)
+    scrape_results = scrape_results or {}
     
     # Pre-calculate counts for filters
     total_jobs = len(jobs)
 
-    # Build new-jobs banner HTML
-    if new_count > 0:
+    # Build new-jobs banner HTML (collapsible)
+    if new_count > 0 or scrape_results:
         label = "1 new job" if new_count == 1 else f"{new_count} new jobs"
+        has_errors = any(s.get("state") == "error" for s in scrape_results.values())
+        error_count = sum(1 for s in scrape_results.values() if s.get("state") == "error")
+        
+        # Build inner rows for the collapsible table
+        table_rows = ""
+        for comp_name, s in sorted(scrape_results.items(), key=lambda x: x[0].lower()):
+            ctype = s.get("type", "api").upper()[:3]  # API, BRO, HTM
+            cstate = s.get("state", "done")
+            jobs_count = s.get("jobs", 0)
+            err_msg = s.get("error", "")
+            
+            if cstate == "error":
+                status_cell = f'<span class="sr-status sr-error">❌ Error</span>'
+                if err_msg:
+                    status_cell += f' <span class="sr-errmsg">{_esc(err_msg[:120])}</span>'
+                row_class = "sr-row sr-row-error"
+            elif cstate == "done":
+                status_cell = f'<span class="sr-status sr-ok">✅ {jobs_count} jobs</span>'
+                row_class = "sr-row"
+            else:
+                status_cell = f'<span class="sr-status sr-warn">⚠️ {cstate}</span>'
+                row_class = "sr-row"
+            
+            table_rows += f"""
+            <tr class="{row_class}">
+              <td class="sr-name">{_esc(comp_name)}</td>
+              <td><span class="sr-type sr-type-{s.get('type','api')}">{ctype}</span></td>
+              <td class="sr-status-cell">{status_cell}</td>
+            </tr>"""
+        
+        # Error summary in the header
+        error_pill = f' <span class="banner-error-pill">{error_count} errors</span>' if has_errors else ''
+        new_summary = f'🆕 {label} since last refresh' if new_count > 0 else '🔄 Scrape complete'
+        
         new_banner_html = f"""
     <div class="new-banner" id="new-banner">
-      <span>🆕 {label} since last refresh</span>
-      <button class="banner-close" onclick="document.getElementById('new-banner').style.display='none'" title="Dismiss">✕</button>
+      <div class="banner-top">
+        <div class="banner-left">
+          <button class="banner-toggle" id="banner-toggle-btn" onclick="toggleBannerDetails()" title="Toggle details">▶</button>
+          <span>{new_summary}{error_pill}</span>
+        </div>
+        <button class="banner-close" onclick="document.getElementById('new-banner').style.display='none'" title="Dismiss">✕</button>
+      </div>
+      <div class="banner-details" id="banner-details" style="display:none;">
+        <table class="scrape-results-table">
+          <thead>
+            <tr><th>Company</th><th>Type</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            {table_rows}
+          </tbody>
+        </table>
+      </div>
     </div>"""
     else:
         new_banner_html = ""
@@ -361,20 +413,42 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     .new-banner {{
       background: linear-gradient(135deg, var(--accent), var(--accent-hover));
       color: #fff;
-      padding: 0.65rem 2rem;
+      padding: 0 2rem;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
       font-size: 0.9rem;
       font-weight: 600;
       letter-spacing: 0.01em;
       flex-shrink: 0;
       animation: slideDown 0.4s ease;
     }}
+    .banner-top {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 0;
+    }}
+    .banner-left {{
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }}
     @keyframes slideDown {{
       from {{ transform: translateY(-100%); opacity: 0; }}
       to   {{ transform: translateY(0);    opacity: 1; }}
     }}
+    .banner-toggle {{
+      background: rgba(255,255,255,0.2);
+      border: none; color: #fff;
+      width: 22px; height: 22px;
+      border-radius: 50%; cursor: pointer;
+      font-size: 0.65rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, transform 0.25s;
+      flex-shrink: 0;
+    }}
+    .banner-toggle:hover {{ background: rgba(255,255,255,0.35); }}
+    .banner-toggle.open {{ transform: rotate(90deg); }}
     .banner-close {{
       background: rgba(255,255,255,0.2);
       border: none; color: #fff;
@@ -383,8 +457,62 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
       font-size: 0.8rem; font-weight: 700;
       display: flex; align-items: center; justify-content: center;
       transition: background 0.2s;
+      flex-shrink: 0;
     }}
     .banner-close:hover {{ background: rgba(255,255,255,0.35); }}
+    .banner-error-pill {{
+      background: rgba(0,0,0,0.25);
+      color: #ffd4d4;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-weight: 700;
+      margin-left: 4px;
+    }}
+
+    /* Banner details (collapsible table) */
+    .banner-details {{
+      border-top: 1px solid rgba(255,255,255,0.15);
+      padding: 0.75rem 0 0.85rem;
+      overflow-x: auto;
+    }}
+    .scrape-results-table {{
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.8rem;
+      font-weight: 400;
+    }}
+    .scrape-results-table th {{
+      text-align: left;
+      color: rgba(255,255,255,0.65);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0 0.6rem 0.4rem;
+    }}
+    .sr-row td {{ padding: 0.25rem 0.6rem; }}
+    .sr-row-error td {{ background: rgba(0,0,0,0.15); border-radius: 4px; }}
+    .sr-name {{ color: rgba(255,255,255,0.9); font-weight: 500; white-space: nowrap; }}
+    .sr-type {{
+      font-size: 0.68rem; font-weight: 700;
+      padding: 1px 5px; border-radius: 3px;
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+    }}
+    .sr-type-browser {{ background: rgba(200,150,255,0.3); color: #e0b0ff; }}
+    .sr-type-html {{ background: rgba(255,220,100,0.3); color: #ffe080; }}
+    .sr-status-cell {{ white-space: nowrap; }}
+    .sr-status {{ font-size: 0.8rem; }}
+    .sr-ok {{ color: #9effb4; }}
+    .sr-error {{ color: #ffaaaa; }}
+    .sr-warn {{ color: #ffd87a; }}
+    .sr-errmsg {{
+      font-size: 0.73rem;
+      color: rgba(255,200,200,0.85);
+      margin-left: 4px;
+      font-style: italic;
+      font-weight: 400;
+    }}
 
     /* NEW badge on job cards */
     .new-badge {{
@@ -1018,6 +1146,16 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
       // Sync header counts to match what's actually visible
       applyFilters();
     }})();
+
+    // ── Collapsible Banner ──────────────────────────────────
+    function toggleBannerDetails() {{
+      const details = document.getElementById('banner-details');
+      const btn = document.getElementById('banner-toggle-btn');
+      if (!details) return;
+      const isOpen = details.style.display === 'none' || details.style.display === '';
+      details.style.display = isOpen ? 'block' : 'none';
+      if (btn) btn.classList.toggle('open', isOpen);
+    }}
 
     // ── Server-aware Refresh ────────────────────────────────
     function showScrapingBanner(show) {{

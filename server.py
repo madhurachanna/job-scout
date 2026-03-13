@@ -36,20 +36,23 @@ class ScraperState:
         self.last_job_count = 0
         self.last_error = None
         self.last_errors = []
+        self.scrape_results = {}  # per-company: {type, state, jobs, error}
 
     def start(self):
         with self._lock:
             self.running = True
             self.last_error = None
             self.last_errors = []
+            self.scrape_results = {}
 
-    def finish(self, job_count: int, new_job_count: int, errors: list):
+    def finish(self, job_count: int, new_job_count: int, errors: list, scrape_results: dict = None):
         with self._lock:
             self.running = False
             self.last_refresh = datetime.now(timezone.utc).isoformat()
             self.last_job_count = job_count
             self.last_new_job_count = new_job_count
             self.last_errors = errors
+            self.scrape_results = scrape_results or {}
 
     def fail(self, error: str):
         with self._lock:
@@ -65,6 +68,7 @@ class ScraperState:
                 "last_new_job_count": getattr(self, 'last_new_job_count', self.last_job_count),
                 "last_error": self.last_error,
                 "last_errors": self.last_errors,
+                "scrape_results": self.scrape_results,
                 "seen_count": get_seen_count(settings.db_path),
             }
 
@@ -82,7 +86,7 @@ def run_scraper_background(config_path: str):
 
     try:
         career_pages = load_career_pages(config_path)
-        final_jobs, errors = run_once(career_pages)
+        final_jobs, errors, scrape_results = run_once(career_pages)
 
         total_count = len(final_jobs) if final_jobs else 0
 
@@ -100,9 +104,9 @@ def run_scraper_background(config_path: str):
             from tools.html_report import generate_html_report
             import os
             html_path = os.path.join(settings.output_dir, "jobs.html")
-            generate_html_report(final_jobs, html_path, new_keys=new_keys)
+            generate_html_report(final_jobs, html_path, new_keys=new_keys, scrape_results=scrape_results)
 
-        state.finish(total_count, new_count, errors or [])
+        state.finish(total_count, new_count, errors or [], scrape_results)
         print(f"✅ [Server] Scraping complete: {total_count} total, {new_count} new jobs.")
 
         if errors:

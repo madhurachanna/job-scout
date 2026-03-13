@@ -20,10 +20,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
 
-def _scrape_one_company(page: dict) -> tuple[list[dict], list[str]]:
+def _scrape_one_company(page: dict) -> tuple[list[dict], list[str], str]:
     """
     Run the full scrape→parse→normalize pipeline for a single company.
-    Returns (normalized_jobs, errors).
+    Returns (normalized_jobs, errors, error_msg).
     """
     from agents.scraper import scraper_agent
     from agents.parser import parser_agent
@@ -49,19 +49,24 @@ def _scrape_one_company(page: dict) -> tuple[list[dict], list[str]]:
         state.update(scraper_agent(state))
         state.update(parser_agent(state))
         state.update(normalizer_agent(state))
-        return state.get("normalized_jobs", []), state.get("errors", [])
+        errs = state.get("errors", [])
+        # Surface the first error message for display if any
+        err_msg = errs[0].split(": ", 1)[-1] if errs else ""
+        return state.get("normalized_jobs", []), errs, err_msg
     except Exception as e:
         print(f"[Parallel] ❌ {name} failed: {e}")
-        return [], [f"{name}: {e}"]
+        return [], [f"{name}: {e}"], str(e)
 
 
-def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str]]:
+def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str], dict]:
     """
     Run one scraping cycle in parallel — all companies scraped concurrently.
     API sources: up to 10 workers.
     Browser sources: up to 2 workers (RAM-limited).
     HTML/LLM sources: up to 3 workers.
     Results are aggregated, then dedup + formatter run once on the combined pool.
+    Returns (final_jobs, errors, scrape_results) where scrape_results is a dict
+    mapping company name → {type, state, jobs, error_msg}.
     """
     from agents.planner import planner_agent
     from agents.dedup import dedup_agent
@@ -153,17 +158,18 @@ def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str]]:
                 statuses[name]["state"] = "done"
                 statuses[name]["jobs"] = count
 
-    def set_error(name):
+    def set_error(name, error_msg=""):
         with status_lock:
             if name in statuses:
                 statuses[name]["state"] = "error"
+                statuses[name]["error"] = error_msg
 
     def _scrape_with_progress(page):
         name = page.get("name", "?")
         set_scraping(name)
-        jobs, errs = _scrape_one_company(page)
+        jobs, errs, err_msg = _scrape_one_company(page)
         if errs and not jobs:
-            set_error(name)
+            set_error(name, err_msg)
         else:
             set_done(name, len(jobs))
         return jobs, errs
@@ -188,7 +194,7 @@ def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str]]:
                         all_errors.extend(errs)
                     except Exception as e:
                         name = futures[future].get("name", "?")
-                        set_error(name)
+                        set_error(name, str(e))
                         all_errors.append(f"{name}: {e}")
                     live.update(build_table())
 
@@ -215,7 +221,8 @@ def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str]]:
     final_state.update(dedup_agent(final_state))
     final_state.update(formatter_agent(final_state))
 
-    return final_state.get("final_jobs", []), final_state.get("errors", [])
+    # Return the per-company statuses dict for UI display
+    return final_state.get("final_jobs", []), final_state.get("errors", []), statuses
 
 
 
@@ -357,7 +364,7 @@ Examples:
             print(f"{'─' * 60}\n")
 
             try:
-                final_jobs, errors = run_once(career_pages)
+                final_jobs, errors, _statuses = run_once(career_pages)
 
                 if final_jobs:
                     new_jobs = get_new_jobs(final_jobs, settings.db_path)
@@ -405,7 +412,7 @@ Examples:
     # ── Single run mode ──────────────────────────────────────
     else:
         try:
-            final_jobs, errors = run_once(career_pages)
+            final_jobs, errors, _statuses = run_once(career_pages)
 
             print(f"\n✅ Done! Found {len(final_jobs)} unique jobs.")
             if errors:
