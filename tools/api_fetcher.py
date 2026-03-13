@@ -487,7 +487,7 @@ def parse_greenhouse_jobs_api(api_response: dict, source_name: str) -> list[dict
         updated_at = raw_job.get("updated_at", "")
         if updated_at:
             try:
-                from datetime import timedelta, timezone as _tz
+                from datetime import datetime, timedelta, timezone as _tz
                 dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
                 # Only use if updated within the last 60 days
                 if (datetime.now(_tz.utc) - dt).days <= 60:
