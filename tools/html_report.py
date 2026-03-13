@@ -63,7 +63,6 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
                     ts = dt.timestamp()
                 # Handle date-only strings like "2026-03-11" (Phenom/Adobe)
                 elif len(date_str) == 10 and date_str[4] == "-":
-                    from datetime import timezone
                     dt = datetime.strptime(date_str, "%Y-%m-%d")
                     # Treat as midnight UTC
                     dt = dt.replace(tzinfo=timezone.utc)
