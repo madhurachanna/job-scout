@@ -54,12 +54,20 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         ts = 0
         if date_str:
             try:
-                # Handle ISO format
+                # Handle ISO datetime with +0000 suffix (most API sources)
                 if date_str.endswith("+0000"):
                     dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z")
+                    ts = dt.timestamp()
+                # Handle date-only strings like "2026-03-11" (Phenom/Adobe)
+                elif len(date_str) == 10 and date_str[4] == "-":
+                    from datetime import timezone
+                    dt = datetime.strptime(date_str, "%Y-%m-%d")
+                    # Treat as midnight UTC
+                    dt = dt.replace(tzinfo=timezone.utc)
+                    ts = dt.timestamp()
                 else:
                     dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                ts = dt.timestamp()
+                    ts = dt.timestamp()
             except (ValueError, TypeError):
                 pass
         
@@ -174,9 +182,13 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
                 try:
                     if date_posted.endswith("+0000"):
                         dt = datetime.strptime(date_posted, "%Y-%m-%dT%H:%M:%S%z")
+                    elif len(date_posted) == 10 and date_posted[4] == "-":
+                        # Date-only (e.g. "2026-03-11" from Phenom/Adobe)
+                        from datetime import timezone as _tz
+                        dt = datetime.strptime(date_posted, "%Y-%m-%d").replace(tzinfo=_tz.utc)
                     else:
                         dt = datetime.fromisoformat(date_posted.replace("Z", "+00:00"))
-                    
+
                     # Convert to local system time (EST for user)
                     dt_local = dt.astimezone()
                     date_display = dt_local.strftime("%b %d, %I:%M %p")

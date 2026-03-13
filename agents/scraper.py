@@ -268,8 +268,8 @@ def scraper_agent(state: AgentState) -> dict:
                 if len(page_jobs) == 0:
                     break
 
-                if page_num >= 5:
-                    print(f"[Scraper] Reached limit of 5 pages for {name}")
+                if page_num >= 10:
+                    print(f"[Scraper] Reached limit of 10 pages for {name}")
                     break
 
                 page_num += 1

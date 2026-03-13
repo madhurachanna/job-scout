@@ -1,6 +1,6 @@
 """
 Job Store — SQLite-based persistence for tracking seen jobs.
-Used by the scheduler to only surface new postings.
+Used by the scheduler to only surface new postings each scrape session.
 """
 
 import os
@@ -19,7 +19,9 @@ def _get_connection(db_path: str = None) -> sqlite3.Connection:
     """Get a SQLite connection, creating the database and directory if needed."""
     db_path = db_path or DEFAULT_DB_PATH
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    return sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")  # Better concurrent access
+    return conn
 
 
 def init_db(db_path: str = None) -> None:
@@ -52,9 +54,51 @@ def _make_dedup_key(job: dict) -> str:
     return f"{title}|{company}|{location}"
 
 
+def mark_seen(jobs: list[dict], db_path: str = None) -> set[str]:
+    """
+    Insert jobs into the seen_jobs table.
+
+    Returns the set of dedup_keys that were **newly inserted** in this call
+    (i.e. were not already in the database before this scrape run).
+    This is the authoritative source of "new jobs" for the current session.
+
+    Args:
+        jobs: List of job dicts to mark as seen.
+        db_path: Path to SQLite database.
+
+    Returns:
+        Set of dedup_key strings for jobs that are brand-new to the DB.
+    """
+    if not jobs:
+        return set()
+
+    conn = _get_connection(db_path)
+    now = datetime.now(timezone.utc).isoformat()
+    new_keys: set[str] = set()
+
+    try:
+        for job in jobs:
+            key = _make_dedup_key(job)
+            try:
+                conn.execute(
+                    "INSERT INTO seen_jobs (dedup_key, title, company, url, first_seen_at) VALUES (?, ?, ?, ?, ?)",
+                    (key, job.get("title", ""), job.get("company", ""), job.get("url", ""), now),
+                )
+                new_keys.add(key)  # Only added if INSERT succeeded (not a duplicate)
+            except sqlite3.IntegrityError:
+                pass  # Already existed in DB — not new
+
+        conn.commit()
+        return new_keys
+    finally:
+        conn.close()
+
+
 def get_new_jobs(jobs: list[dict], db_path: str = None) -> list[dict]:
     """
     Filter jobs, returning only those not previously seen.
+    NOTE: Prefer using the return value of mark_seen() for the current session's
+    new jobs. This function is kept for use in scheduled/CLI mode.
 
     Args:
         jobs: List of job dicts to check.
@@ -76,42 +120,6 @@ def get_new_jobs(jobs: list[dict], db_path: str = None) -> list[dict]:
             if cursor.fetchone() is None:
                 new_jobs.append(job)
         return new_jobs
-    finally:
-        conn.close()
-
-
-def mark_seen(jobs: list[dict], db_path: str = None) -> int:
-    """
-    Insert jobs into the seen_jobs table.
-
-    Args:
-        jobs: List of job dicts to mark as seen.
-        db_path: Path to SQLite database.
-
-    Returns:
-        Number of newly inserted jobs.
-    """
-    if not jobs:
-        return 0
-
-    conn = _get_connection(db_path)
-    now = datetime.now(timezone.utc).isoformat()
-    inserted = 0
-
-    try:
-        for job in jobs:
-            key = _make_dedup_key(job)
-            try:
-                conn.execute(
-                    "INSERT INTO seen_jobs (dedup_key, title, company, url, first_seen_at) VALUES (?, ?, ?, ?, ?)",
-                    (key, job.get("title", ""), job.get("company", ""), job.get("url", ""), now),
-                )
-                inserted += 1
-            except sqlite3.IntegrityError:
-                pass  # Already exists
-
-        conn.commit()
-        return inserted
     finally:
         conn.close()
 

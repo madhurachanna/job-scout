@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.settings import settings
 from tools.file_handler import load_career_pages
-from tools.job_store import init_db, get_new_jobs, mark_seen, get_seen_count
+from tools.job_store import init_db, mark_seen, get_seen_count
 
 
 # ── Shared State ──────────────────────────────────────────────
@@ -86,23 +86,16 @@ def run_scraper_background(config_path: str):
 
         total_count = len(final_jobs) if final_jobs else 0
 
-        # Determine which jobs are new (not previously seen)
-        new_jobs = get_new_jobs(final_jobs, settings.db_path) if final_jobs else []
-        new_count = len(new_jobs)
-
-        # Build a set of dedup keys for new jobs (for badging in HTML)
-        new_keys = set()
-        for job in new_jobs:
-            title = job.get("title", "").lower().strip()
-            company = job.get("company", "").lower().strip()
-            location = job.get("location", "").lower().strip()
-            new_keys.add(f"{title}|{company}|{location}")
-
-        # Mark all scraped jobs as seen
+        # mark_seen() inserts each job into the DB and returns the set of
+        # dedup_keys that were *newly* inserted (not seen before this run).
+        # This is the single-step, race-condition-free source of "new jobs".
+        new_keys: set = set()
         if final_jobs:
-            mark_seen(final_jobs, settings.db_path)
+            new_keys = mark_seen(final_jobs, settings.db_path)
 
-        # Generate HTML with ALL 2-day jobs, tagging new ones for the banner
+        new_count = len(new_keys)
+
+        # Generate HTML with all jobs, tagging new ones for the banner/tab
         if final_jobs:
             from tools.html_report import generate_html_report
             import os

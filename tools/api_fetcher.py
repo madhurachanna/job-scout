@@ -481,10 +481,19 @@ def parse_greenhouse_jobs_api(api_response: dict, source_name: str) -> list[dict
         # Build job URL
         job_url = raw_job.get("absolute_url", "")
 
-        # Greenhouse only provides updated_at, not a true posted date.
-        # updated_at changes whenever the listing is edited, so using it as
-        # date_posted would misleadingly mark old jobs as "posted today".
+        # Use updated_at as an approximate posted date, capped at 60 days
+        # to avoid showing long-stale listings as if they were recently posted.
         date_posted = ""
+        updated_at = raw_job.get("updated_at", "")
+        if updated_at:
+            try:
+                from datetime import timedelta, timezone as _tz
+                dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                # Only use if updated within the last 60 days
+                if (datetime.now(_tz.utc) - dt).days <= 60:
+                    date_posted = dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
+            except (ValueError, TypeError):
+                pass
 
         # Extract company name from source_name
         company = source_name.replace(" Careers", "").replace(" Jobs", "")
@@ -508,6 +517,7 @@ def parse_greenhouse_jobs_api(api_response: dict, source_name: str) -> list[dict
         })
 
     return jobs
+
 
 
 def parse_oracle_hcm_jobs_api(api_response: dict, source_name: str, base_url: str = "", site_number: str = "CX_1001") -> list[dict]:
