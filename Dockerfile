@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright and its system dependencies (chromium only to save space)
+RUN playwright install --with-deps chromium
+
 # Copy the rest of the project (venv, data, output, .env excluded via .dockerignore)
 COPY . .
 
