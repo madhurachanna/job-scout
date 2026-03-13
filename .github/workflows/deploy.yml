@@ -89,6 +89,13 @@ jobs:
             # ── Ensure data / output dirs exist (volume mounts) ─
             mkdir -p data output
 
+            # ── Clean up disk space before deploy ───────────────
+            echo "🧹 Cleaning up disk space..."
+            docker system prune -af --volumes 2>/dev/null || true
+            sudo apt-get clean 2>/dev/null || true
+            sudo journalctl --vacuum-size=50M 2>/dev/null || true
+            df -h /  # Log free space after cleanup
+
             # ── Load the new Docker image ────────────────────────
             docker load < job-scout.tar.gz
 
