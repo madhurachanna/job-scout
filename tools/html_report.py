@@ -2,7 +2,7 @@
 HTML Report Generator — creates a beautiful static HTML page for job listings.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = None) -> str:
@@ -19,7 +19,10 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     Returns:
         Path to the generated HTML file.
     """
-    timestamp_str = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+    # Store UTC ISO so the browser can reformat it in the user's local timezone.
+    now_utc = datetime.now(timezone.utc)
+    timestamp_iso = now_utc.isoformat()          # e.g. 2026-03-13T01:32:00+00:00
+    timestamp_str = now_utc.strftime("%B %d, %Y") # Fallback (date only, no time)
     new_keys = new_keys or set()
     new_count = len(new_keys)
     
@@ -763,7 +766,7 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
     <div class="brand">
       <button class="hamburger" id="hamburger-btn" onclick="toggleSidebar()" title="Filters">☰</button>
       <h1>🔍 <span>Job Scout</span></h1>
-      <div class="subtitle">Scraped on {timestamp_str}</div>
+      <div class="subtitle" id="scrape-time" data-iso="{timestamp_iso}">Scraped on {timestamp_str}</div>
     </div>
     <div class="stats">
       <div class="stat">
@@ -918,25 +921,33 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
             card.style.display = visible ? 'flex' : 'none';
         }});
         
-        // Hide empty sections / Show matching company sections
+        // Hide empty sections / update badge counts
         sections.forEach(section => {{
             // Apply company filter (works in both normal and newOnly mode)
             if (currentState.company !== 'all' && section.dataset.comp !== currentState.company) {{
                 section.style.display = 'none';
                 return;
             }}
-            
+
             section.style.display = 'block';
-            
-            // Check if any visible children
+
+            // Count visible cards in this section
             const visibleCards = section.querySelectorAll('.job-card[style="display: flex;"]');
             if (visibleCards.length === 0) {{
                 section.style.display = 'none';
             }} else {{
                 visibleCount += visibleCards.length;
             }}
+
+            // Update the per-company badge count in the section header
+            const badge = section.querySelector('.company-name .badge');
+            if (badge) badge.textContent = visibleCards.length;
         }});
-        
+
+        // Update "All Companies" sidebar badge to reflect total visible
+        const allCompBadge = document.querySelector('.comp-filter:first-of-type .badgish');
+        if (allCompBadge) allCompBadge.textContent = visibleCount;
+
         // Update visible count in toolbar and header
         const countSpan = document.getElementById('visible-count');
         if (countSpan) countSpan.textContent = visibleCount + ' jobs visible';
@@ -977,7 +988,22 @@ def generate_html_report(jobs: list[dict], output_path: str, new_keys: set = Non
         document.body.setAttribute('data-theme', 'light');
         document.getElementById('theme-toggle').textContent = '☀️';
       }}
-      // Format all dates in browser's local timezone
+
+      // Format scrape timestamp in browser's local timezone
+      const scrapeEl = document.getElementById('scrape-time');
+      if (scrapeEl && scrapeEl.dataset.iso) {{
+        try {{
+          const d = new Date(scrapeEl.dataset.iso);
+          if (!isNaN(d)) {{
+            scrapeEl.textContent = 'Scraped on ' + d.toLocaleDateString('en-US', {{
+              year: 'numeric', month: 'long', day: 'numeric',
+              hour: 'numeric', minute: '2-digit'
+            }});
+          }}
+        }} catch(e) {{}}
+      }}
+
+      // Format all job dates in browser's local timezone
       document.querySelectorAll('.job-date[data-iso]').forEach(el => {{
         const iso = el.dataset.iso;
         if (!iso) return;
