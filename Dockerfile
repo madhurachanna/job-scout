@@ -21,7 +21,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright and its system dependencies (chromium only to save space)
-RUN playwright install --with-deps chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install --with-deps chromium \
+    && rm -rf /ms-playwright/firefox-* /ms-playwright/webkit-* /ms-playwright/ffmpeg-* \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # Copy the rest of the project (venv, data, output, .env excluded via .dockerignore)
 COPY . .
