@@ -32,8 +32,7 @@ def scraper_agent(state: AgentState) -> dict:
 
     # ── API Mode ─────────────────────────────────────────────────
     if page_type == "api" and api_url:
-        print(f"[Scraper] 🔌 API mode for: {name}")
-        print(f"[Scraper] Fetching: {api_url}")
+        print(f"[Scraper] 🔌 {name} (API)")
 
         # Detect which API type we're dealing with
         is_amazon = "amazon.jobs" in api_url
@@ -83,14 +82,14 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_amazon_jobs_api(data, name)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Offset {offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_hits})")
+
 
                 # Check if we have all jobs
                 if len(all_jobs) >= total_hits or len(page_jobs) == 0:
                     break
 
-                if offset >= 500:  # Safety limit: max 500 jobs
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                if offset >= 500:
+                    # Safety limit
                     break
 
                 offset += limit
@@ -142,7 +141,7 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_eightfold_jobs_api(data, name, base_job_url)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Start {start}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 # Check if we have all jobs (handle APIs that return total=0)
                 if len(positions) == 0:
@@ -151,8 +150,8 @@ def scraper_agent(state: AgentState) -> dict:
                 if total_count > 0 and len(all_jobs) >= total_count:
                     break
 
-                if start >= 500:  # Safety limit: max 500 jobs
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                if start >= 500:
+                    # Safety limit
                     break
 
                 start += len(positions)
@@ -189,14 +188,14 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_workday_jobs_api(data, name, base_url)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Offset {offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 # Check if we have all jobs
                 if len(all_jobs) >= total_count or len(page_jobs) == 0:
                     break
 
-                if offset >= 500:  # Safety limit: max 500 jobs
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                if offset >= 500:
+                    # Safety limit
                     break
 
                 offset += limit
@@ -228,13 +227,13 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_lever_jobs_api(data, name)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Skip {skip}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)})")
+
 
                 if len(page_jobs) < limit:
                     break
 
-                if skip >= 500:  # Safety limit: max 500 jobs
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                if skip >= 500:
+                    # Safety limit
                     break
 
                 skip += limit
@@ -263,13 +262,13 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_greenhouse_jobs_api(data, name)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Page {page_num}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 if len(page_jobs) == 0:
                     break
 
                 if page_num >= 10:
-                    print(f"[Scraper] Reached limit of 10 pages for {name}")
+                    # Safety limit
                     break
 
                 page_num += 1
@@ -313,13 +312,13 @@ def scraper_agent(state: AgentState) -> dict:
 
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Offset {offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 if len(page_jobs) == 0 or len(all_jobs) >= total_count:
                     break
 
-                if offset >= 500:  # Safety limit: max 500 jobs
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                if offset >= 500:
+                    # Safety limit
                     break
 
                 offset += limit
@@ -383,13 +382,13 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_phenom_jobs_api(data, name, base_url)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Offset {from_offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_hits})")
+
 
                 if len(page_jobs) == 0 or len(all_jobs) >= total_hits:
                     break
 
                 if from_offset >= 500:
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    # Safety limit
                     break
 
                 from_offset += page_size
@@ -437,13 +436,13 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_goldmansachs_jobs_api(data, name)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Page {page_num}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 if len(page_jobs) == 0 or (total_count > 0 and len(all_jobs) >= total_count):
                     break
 
                 if len(all_jobs) >= 500:
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    # Safety limit
                     break
 
                 page_num += 1
@@ -485,13 +484,13 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_epam_jobs_api(data, name)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Offset {from_offset}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 if len(page_jobs) == 0 or (total_count > 0 and len(all_jobs) >= total_count):
                     break
 
                 if from_offset >= 500:
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    # Safety limit
                     break
 
                 from_offset += page_size
@@ -519,13 +518,13 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_apple_jobs_api(data, name)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Page {page_num}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 if len(page_jobs) == 0 or (total_count > 0 and len(all_jobs) >= total_count):
                     break
 
                 if len(all_jobs) >= 500:
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    # Safety limit
                     break
 
                 page_num += 1
@@ -552,13 +551,13 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = data.get("jobs", [])
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Page {page_num}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 if len(page_jobs) == 0 or (total_count > 0 and len(all_jobs) >= total_count):
                     break
 
                 if len(all_jobs) >= 500:
-                    print(f"[Scraper] Reached limit of 500 jobs for {name}")
+                    # Safety limit
                     break
 
                 page_num += 1
@@ -596,19 +595,19 @@ def scraper_agent(state: AgentState) -> dict:
                 page_jobs = parse_github_careers_api(data, name)
                 all_jobs.extend(page_jobs)
 
-                print(f"[Scraper] Page {page_num}: fetched {len(page_jobs)} jobs (total so far: {len(all_jobs)}/{total_count})")
+
 
                 # Check if we have all jobs
                 if len(all_jobs) >= total_count or len(page_jobs) == 0:
                     break
 
-                if page_num >= 10:  # Safety limit: max 10 pages (500 jobs)
-                    print(f"[Scraper] Reached limit of 10 pages for {name}")
+                if page_num >= 10:
+                    # Safety limit
                     break
 
                 page_num += 1
 
-        print(f"[Scraper] ✅ Fetched {len(all_jobs)} jobs from API")
+        print(f"[Scraper] ✅ {name}: {len(all_jobs)} jobs")
 
         # In API mode, we skip the parser (no LLM needed!) and go straight
         # to normalizer. We put the parsed jobs directly into extracted_jobs.
@@ -622,11 +621,11 @@ def scraper_agent(state: AgentState) -> dict:
     # ── HTML Scrape Mode ─────────────────────────────────────────
     # ── Browser Mode (Playwright) ────────────────────────────────
     if page_type == "browser":
-        print(f"[Scraper] 🌐 Browser mode for: {name}")
+        print(f"[Scraper] 🌐 {name} (Browser)")
         from tools.browser_scraper import scrape_with_browser
 
         all_jobs = scrape_with_browser(url, name)
-        print(f"[Scraper] ✅ Browser scraped {len(all_jobs)} jobs from {name}")
+        print(f"[Scraper] ✅ {name}: {len(all_jobs)} jobs")
 
         return {
             "raw_html": "",
@@ -636,12 +635,12 @@ def scraper_agent(state: AgentState) -> dict:
         }
 
     # ── HTML Scrape Mode ─────────────────────────────────────────
-    print(f"[Scraper] 🌐 HTML mode for: {name} ({url})")
+    print(f"[Scraper] 📄 {name} (HTML)")
 
     result = fetch_page(url)
 
     if not result["success"]:
-        print(f"[Scraper] Failed: {result['error']}")
+        print(f"[Scraper] ❌ {name}: {result['error']}")
         return {
             "raw_html": "",
             "cleaned_text": "",
@@ -649,11 +648,11 @@ def scraper_agent(state: AgentState) -> dict:
         }
 
     raw_html = result["html"]
-    print(f"[Scraper] Fetched {len(raw_html)} chars of HTML")
+
 
     # Extract clean text
     cleaned_text = extract_text(raw_html)
-    print(f"[Scraper] Extracted {len(cleaned_text)} chars of text")
+
 
     # Extract job-related links for additional context
     job_links = extract_job_links(raw_html, url)
@@ -663,7 +662,7 @@ def scraper_agent(state: AgentState) -> dict:
             links_text += f"- {link['text']}: {link['url']}\n"
         cleaned_text += links_text
 
-    print(f"[Scraper] Found {len(job_links)} job-related links")
+
 
     return {
         "raw_html": raw_html,

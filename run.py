@@ -60,13 +60,11 @@ def _scrape_one_company(page: dict) -> tuple[list[dict], list[str], str]:
 
 def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str], dict]:
     """
-    Run one scraping cycle in parallel — all companies scraped concurrently.
-    API sources: up to 10 workers.
-    Browser sources: up to 2 workers (RAM-limited).
-    HTML/LLM sources: up to 3 workers.
-    Results are aggregated, then dedup + formatter run once on the combined pool.
-    Returns (final_jobs, errors, scrape_results) where scrape_results is a dict
-    mapping company name → {type, state, jobs, error_msg}.
+    Run one scraping cycle.
+    Phase 1: API scrapers in parallel (batched, max 5 workers).
+    Phase 2: Browser scrapers serially (one at a time — RAM-safe for EC2).
+    Phase 3: HTML/LLM scrapers (max 3 workers).
+    Returns (final_jobs, errors, scrape_results).
     """
     from agents.planner import planner_agent
     from agents.dedup import dedup_agent
@@ -89,10 +87,10 @@ def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str], dict]:
     scraping_plan = plan_state.get("scraping_plan", [])
 
     if not scraping_plan:
-        print("[Parallel] No pages to scrape.")
-        return [], []
+        print("⚠️  No pages to scrape.")
+        return [], [], {}
 
-    # Split by type for different worker counts
+    # Split by type
     api_pages     = [p for p in scraping_plan if p.get("type") == "api"]
     browser_pages = [p for p in scraping_plan if p.get("type") == "browser"]
     html_pages    = [p for p in scraping_plan if p.get("type") not in ("api", "browser")]
@@ -100,119 +98,104 @@ def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str], dict]:
 
     all_normalized: list[dict] = []
     all_errors: list[str] = []
-
-    # ── Live progress display ────────────────────────────────────
-    from rich.live import Live
-    from rich.table import Table
-    from rich.text import Text
-    from rich.console import Console
-    import itertools, time
-
-    SPINNERS = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"]
-    TYPE_STYLE = {"api": "cyan", "browser": "magenta", "html": "yellow"}
-
     statuses: dict[str, dict] = {}
-    status_lock = threading.Lock()
-    spin_cycle = itertools.cycle(SPINNERS)
-    spin_char = [next(spin_cycle)]
+    error_count = 0
 
+    # Initialize statuses
     for p in scraping_plan:
         n = p.get("name", "?")
         t = p.get("type", "html")
         statuses[n] = {"type": t, "state": "waiting", "jobs": 0, "error": ""}
 
-    def build_table() -> Table:
-        sc = next(spin_cycle)
-        tbl = Table.grid(padding=(0, 2))
-        tbl.add_column(width=30)   # name
-        tbl.add_column(width=9)    # type badge
-        tbl.add_column(width=30)   # dots
-        tbl.add_column(width=20)   # status
-        with status_lock:
-            for name, s in statuses.items():
-                badge_style = TYPE_STYLE.get(s["type"], "white")
-                badge = Text(f"[{s['type'].upper()}]", style=badge_style)
-                if s["state"] == "waiting":
-                    dots = Text("·" * 28, style="dim")
-                    status_cell = Text("Waiting", style="dim")
-                elif s["state"] == "scraping":
-                    dots = Text("·" * 28, style="orange1")
-                    status_cell = Text(f"{sc} Scraping...", style="bold orange1")
-                elif s["state"] == "done":
-                    dots = Text("·" * 28, style="green")
-                    status_cell = Text(f"✅ {s['jobs']} jobs", style="bold green")
-                else:
-                    dots = Text("·" * 28, style="red")
-                    status_cell = Text(f"❌ Error", style="bold red")
-                tbl.add_row(Text(name, style="bold white"), badge, dots, status_cell)
-        return tbl
+    TYPE_LABELS = {"api": "API", "browser": "BROWSER", "html": "HTML"}
+    TYPE_ICONS  = {"api": "🔌", "browser": "🌐", "html": "📄"}
 
-    def set_scraping(name):
-        with status_lock:
-            if name in statuses:
-                statuses[name]["state"] = "scraping"
+    def _fmt_line(name, ptype, status_str):
+        icon = TYPE_ICONS.get(ptype, "📄")
+        label = TYPE_LABELS.get(ptype, "HTML")
+        padded_name = name.ljust(28)
+        dots = "·" * max(2, 30 - len(name))
+        return f"  {icon} [{label:7s}] {padded_name} {dots} {status_str}"
 
-    def set_done(name, count):
-        with status_lock:
-            if name in statuses:
-                statuses[name]["state"] = "done"
-                statuses[name]["jobs"] = count
-
-    def set_error(name, error_msg=""):
-        with status_lock:
-            if name in statuses:
-                statuses[name]["state"] = "error"
-                statuses[name]["error"] = error_msg
-
-    def _scrape_with_progress(page):
+    def _scrape_and_log(page):
+        nonlocal error_count
         name = page.get("name", "?")
-        set_scraping(name)
+        ptype = page.get("type", "html")
+        statuses[name]["state"] = "scraping"
+
         jobs, errs, err_msg = _scrape_one_company(page)
+
         if errs and not jobs:
-            set_error(name, err_msg)
+            statuses[name]["state"] = "error"
+            statuses[name]["error"] = err_msg
+            error_count += 1
+            short_err = err_msg[:60] if err_msg else "Unknown error"
+            print(_fmt_line(name, ptype, f"❌ {short_err}"))
         else:
-            set_done(name, len(jobs))
+            statuses[name]["state"] = "done"
+            statuses[name]["jobs"] = len(jobs)
+            print(_fmt_line(name, ptype, f"✅ {len(jobs)} jobs"))
+
         return jobs, errs
 
-    console = Console()
-    console.print(f"\n🚀 Scraping [bold]{total}[/bold] companies in parallel "
-                  f"([cyan]{len(api_pages)} API[/cyan] · "
-                  f"[magenta]{len(browser_pages)} Browser[/magenta] · "
-                  f"[yellow]{len(html_pages)} HTML[/yellow])\n")
+    # ── Header ────────────────────────────────────────────────────
+    print(f"\n🚀 Scraping {total} companies "
+          f"({len(api_pages)} API · {len(browser_pages)} Browser · {len(html_pages)} HTML)\n")
 
-    with Live(build_table(), console=console, refresh_per_second=8) as live:
+    # ── Phase 1: API scrapers in parallel (batched, max 5 workers) ──
+    if api_pages:
+        print(f"── Phase 1: API scrapers ({len(api_pages)} companies, parallel) ──")
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(_scrape_and_log, p): p for p in api_pages}
+            for future in as_completed(futures):
+                try:
+                    jobs, errs = future.result()
+                    all_normalized.extend(jobs)
+                    all_errors.extend(errs)
+                except Exception as e:
+                    name = futures[future].get("name", "?")
+                    statuses[name]["state"] = "error"
+                    statuses[name]["error"] = str(e)
+                    error_count += 1
+                    all_errors.append(f"{name}: {e}")
+                    print(_fmt_line(name, "api", f"❌ {str(e)[:60]}"))
 
-        def _run_group_live(pages, max_workers):
-            if not pages:
-                return
-            with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                futures = {pool.submit(_scrape_with_progress, p): p for p in pages}
-                for future in as_completed(futures):
-                    try:
-                        jobs, errs = future.result()
-                        all_normalized.extend(jobs)
-                        all_errors.extend(errs)
-                    except Exception as e:
-                        name = futures[future].get("name", "?")
-                        set_error(name, str(e))
-                        all_errors.append(f"{name}: {e}")
-                    live.update(build_table())
+    # ── Phase 2: Browser scrapers SERIALLY (one at a time for RAM) ──
+    if browser_pages:
+        print(f"\n── Phase 2: Browser scrapers ({len(browser_pages)} companies, serial) ──")
+        for page in browser_pages:
+            try:
+                jobs, errs = _scrape_and_log(page)
+                all_normalized.extend(jobs)
+                all_errors.extend(errs)
+            except Exception as e:
+                name = page.get("name", "?")
+                statuses[name]["state"] = "error"
+                statuses[name]["error"] = str(e)
+                error_count += 1
+                all_errors.append(f"{name}: {e}")
+                print(_fmt_line(name, "browser", f"❌ {str(e)[:60]}"))
 
-        # Run API and browser groups concurrently with each other,
-        # HTML is after (needs LLM — don't mix with browser Playwright)
-        api_thread  = threading.Thread(target=_run_group_live, args=(api_pages, 10))
-        brow_thread = threading.Thread(target=_run_group_live, args=(browser_pages, 2))
-        api_thread.start()
-        brow_thread.start()
-        api_thread.join()
-        brow_thread.join()
-        _run_group_live(html_pages, 3)
-        live.update(build_table())
+    # ── Phase 3: HTML/LLM scrapers (max 3 workers) ──────────────
+    if html_pages:
+        print(f"\n── Phase 3: HTML scrapers ({len(html_pages)} companies) ──")
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {pool.submit(_scrape_and_log, p): p for p in html_pages}
+            for future in as_completed(futures):
+                try:
+                    jobs, errs = future.result()
+                    all_normalized.extend(jobs)
+                    all_errors.extend(errs)
+                except Exception as e:
+                    name = futures[future].get("name", "?")
+                    statuses[name]["state"] = "error"
+                    statuses[name]["error"] = str(e)
+                    error_count += 1
+                    all_errors.append(f"{name}: {e}")
 
+    # ── Dedup + format ────────────────────────────────────────────
+    print(f"\n📦 Aggregated {len(all_normalized)} jobs — deduplicating...")
 
-    print(f"\n[Parallel] 📦 Aggregated {len(all_normalized)} jobs — running dedup & format...")
-
-    # Dedup + formatter on the combined pool
     final_state: dict = {
         **plan_state,
         "normalized_jobs": all_normalized,
@@ -221,7 +204,6 @@ def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str], dict]:
     final_state.update(dedup_agent(final_state))
     final_state.update(formatter_agent(final_state))
 
-    # Return the per-company statuses dict for UI display
     return final_state.get("final_jobs", []), final_state.get("errors", []), statuses
 
 

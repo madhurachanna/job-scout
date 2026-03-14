@@ -246,13 +246,22 @@ def scrape_with_browser(url: str, source_name: str) -> list[dict]:
         return []
 
     site_key = site["key"]
-    print(f"[BrowserScraper] 🌐 Launching browser for {source_name} ({site_key})...")
 
     async def _scrape():
         from playwright.async_api import async_playwright
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--single-process",
+                    "--disable-gpu",
+                    "--disable-extensions",
+                    "--js-flags=--max-old-space-size=256",
+                ],
+            )
             context = await browser.new_context(
                 viewport={"width": 1280, "height": 900},
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -261,12 +270,11 @@ def scrape_with_browser(url: str, source_name: str) -> list[dict]:
 
             try:
                 # Navigate and wait for content
-                print(f"[BrowserScraper] Navigating to {url}")
+
                 await page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
                 # Wait for job cards to appear
                 wait_sel = site["wait_selector"]
-                print(f"[BrowserScraper] Waiting for content ({wait_sel})...")
                 try:
                     await page.wait_for_selector(wait_sel, timeout=15000)
                 except Exception:
@@ -290,13 +298,12 @@ def scrape_with_browser(url: str, source_name: str) -> list[dict]:
                 # Run pagination to load more results
                 paginator = PAGINATION_HANDLERS.get(site_key)
                 if paginator:
-                    print(f"[BrowserScraper] Loading more results...")
                     await paginator(page)
 
                 # Extract jobs using site-specific JavaScript
                 extract_js = EXTRACT_SCRIPTS[site_key]
                 raw_jobs = await page.evaluate(extract_js)
-                print(f"[BrowserScraper] Extracted {len(raw_jobs)} raw jobs from DOM")
+
 
                 # Normalize to standard format
                 base_url = site.get("base_url", "")
