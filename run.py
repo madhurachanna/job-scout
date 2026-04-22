@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.settings import settings
 from tools.file_handler import load_career_pages
-from tools.job_store import init_db, get_new_jobs, mark_seen, get_seen_count
+from tools.job_store import init_db, mark_seen, get_seen_count
 from tools.notifier import send_email_notification
 from graph.workflow import graph
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -58,13 +58,13 @@ def _scrape_one_company(page: dict) -> tuple[list[dict], list[str], str]:
         return [], [f"{name}: {e}"], str(e)
 
 
-def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str], dict]:
+def run_once(career_pages: list[dict], db_path: str = None) -> tuple[list[dict], list[str], dict, set]:
     """
     Run one scraping cycle.
     Phase 1: API scrapers in parallel (batched, max 5 workers).
     Phase 2: Browser scrapers serially (one at a time — RAM-safe for EC2).
     Phase 3: HTML/LLM scrapers (max 3 workers).
-    Returns (final_jobs, errors, scrape_results).
+    Returns (final_jobs, errors, scrape_results, new_keys).
     """
     from agents.planner import planner_agent
     from agents.dedup import dedup_agent
@@ -202,9 +202,21 @@ def run_once(career_pages: list[dict]) -> tuple[list[dict], list[str], dict]:
         "errors": all_errors,
     }
     final_state.update(dedup_agent(final_state))
+
+    # Mark jobs as seen in the DB and get which ones are new
+    new_keys: set = set()
+    deduped_jobs = final_state.get("final_jobs", [])
+    if db_path and deduped_jobs:
+        new_keys = mark_seen(deduped_jobs, db_path)
+        print(f"\n🆕 {len(new_keys)} new jobs (not previously seen)")
+
+    # Pass new_keys and scrape_results to formatter for the HTML report
+    final_state["new_keys"] = new_keys
+    final_state["scrape_results"] = statuses
+
     final_state.update(formatter_agent(final_state))
 
-    return final_state.get("final_jobs", []), final_state.get("errors", []), statuses
+    return final_state.get("final_jobs", []), final_state.get("errors", []), statuses, new_keys
 
 
 
@@ -346,11 +358,12 @@ Examples:
             print(f"{'─' * 60}\n")
 
             try:
-                final_jobs, errors, _statuses = run_once(career_pages)
+                final_jobs, errors, _statuses, new_keys = run_once(career_pages, db_path=settings.db_path)
 
                 if final_jobs:
-                    new_jobs = get_new_jobs(final_jobs, settings.db_path)
-                    mark_seen(final_jobs, settings.db_path)
+                    # new_keys already populated by run_once via mark_seen
+                    from tools.job_store import _make_dedup_key
+                    new_jobs = [j for j in final_jobs if _make_dedup_key(j) in new_keys]
 
                     print(f"\n📊 Results: {len(final_jobs)} total, {len(new_jobs)} new")
 
@@ -394,7 +407,7 @@ Examples:
     # ── Single run mode ──────────────────────────────────────
     else:
         try:
-            final_jobs, errors, _statuses = run_once(career_pages)
+            final_jobs, errors, _statuses, _new_keys = run_once(career_pages, db_path=settings.db_path)
 
             print(f"\n✅ Done! Found {len(final_jobs)} unique jobs.")
             if errors:

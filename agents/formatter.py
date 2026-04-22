@@ -48,6 +48,8 @@ def formatter_agent(state: AgentState) -> dict:
     """
     final_jobs = state.get("final_jobs", [])
     errors = state.get("errors", [])
+    new_keys = state.get("new_keys", set())
+    scrape_results = state.get("scrape_results", {})
     output_dir = settings.output_dir
 
     # Step 1: Standardize all job fields
@@ -65,7 +67,7 @@ def formatter_agent(state: AgentState) -> dict:
 
     # Step 4: Generate HTML report
     html_path = os.path.join(output_dir, "jobs.html")
-    generate_html_report(standardized_jobs, html_path)
+    generate_html_report(standardized_jobs, html_path, new_keys=new_keys, scrape_results=scrape_results)
     print(f"[Formatter]   🌐 HTML: {html_path}")
 
     # Step 5: Print summary
