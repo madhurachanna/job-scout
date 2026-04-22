@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.settings import settings
 from tools.file_handler import load_career_pages
-from tools.job_store import init_db, mark_seen, get_seen_count
+from tools.job_store import init_db, get_seen_count
 
 
 # ── Shared State ──────────────────────────────────────────────
@@ -86,25 +86,10 @@ def run_scraper_background(config_path: str):
 
     try:
         career_pages = load_career_pages(config_path)
-        final_jobs, errors, scrape_results = run_once(career_pages)
+        final_jobs, errors, scrape_results, new_keys = run_once(career_pages, db_path=settings.db_path)
 
         total_count = len(final_jobs) if final_jobs else 0
-
-        # mark_seen() inserts each job into the DB and returns the set of
-        # dedup_keys that were *newly* inserted (not seen before this run).
-        # This is the single-step, race-condition-free source of "new jobs".
-        new_keys: set = set()
-        if final_jobs:
-            new_keys = mark_seen(final_jobs, settings.db_path)
-
         new_count = len(new_keys)
-
-        # Generate HTML with all jobs, tagging new ones for the banner/tab
-        if final_jobs:
-            from tools.html_report import generate_html_report
-            import os
-            html_path = os.path.join(settings.output_dir, "jobs.html")
-            generate_html_report(final_jobs, html_path, new_keys=new_keys, scrape_results=scrape_results)
 
         state.finish(total_count, new_count, errors or [], scrape_results)
         print(f"✅ [Server] Scraping complete: {total_count} total, {new_count} new jobs.")

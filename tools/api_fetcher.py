@@ -881,8 +881,16 @@ def parse_apple_jobs_api(api_response: dict, source_name: str) -> list[dict]:
         # Description
         description = raw_job.get("jobSummary", "")
 
-        # Parse posting date
-        date_posted = raw_job.get("postingDate", "")
+        # Parse posting date — Apple returns "Jan 27, 2026" format, convert to ISO
+        raw_date = raw_job.get("postingDate", "")
+        date_posted = ""
+        if raw_date:
+            try:
+                from datetime import datetime as _dt, timezone as _tz
+                dt = _dt.strptime(raw_date, "%b %d, %Y").replace(tzinfo=_tz.utc)
+                date_posted = dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
+            except (ValueError, TypeError):
+                date_posted = raw_date  # Fallback to raw if format changed
 
         # Team info
         team = raw_job.get("team", {})
